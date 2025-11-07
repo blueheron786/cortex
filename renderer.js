@@ -47,7 +47,8 @@ function initEditor() {
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3, 4, 5, 6]
-        }
+        },
+        listItem: false // Disable default list item to allow TaskItem
       }),
       Table.configure({
         resizable: true,
@@ -60,7 +61,10 @@ function initEditor() {
       TableCell,
       TaskList,
       TaskItem.configure({
-        nested: true
+        nested: true,
+        HTMLAttributes: {
+          class: 'task-item'
+        }
       }),
       Highlight.configure({
         multicolor: false
@@ -158,9 +162,14 @@ function renderFileTree(items, container, level = 0) {
         // Toggle folder on click
         itemDiv.addEventListener('click', (e) => {
           e.stopPropagation(); // Prevent parent folder clicks from interfering
-          const isCollapsed = childrenDiv.style.display === 'none';
-          childrenDiv.style.display = isCollapsed ? 'block' : 'none';
-          icon.textContent = isCollapsed ? '▼ ' : '▶ ';
+          const isCurrentlyHidden = childrenDiv.style.display === 'none';
+          if (isCurrentlyHidden) {
+            childrenDiv.style.display = 'block';
+            icon.textContent = '▼ ';
+          } else {
+            childrenDiv.style.display = 'none';
+            icon.textContent = '▶ ';
+          }
         });
         
         container.appendChild(itemDiv);
