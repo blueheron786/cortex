@@ -193,6 +193,65 @@ function markdownToTiptap(markdown) {
         content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
       });
     }
+    // Tables
+    else if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+      // Check if this is a table
+      const cells = line.split('|').slice(1, -1).map(c => c.trim());
+      
+      // Look ahead for separator line
+      if (i + 1 < lines.length) {
+        const nextLine = lines[i + 1];
+        if (nextLine.includes('|') && nextLine.includes('-')) {
+          // This is a table header
+          const tableRows = [];
+          
+          // Header row
+          const headerCells = cells.map(cell => ({
+            type: 'tableHeader',
+            attrs: {},
+            content: [{ type: 'paragraph', content: parseInlineFormatting(cell) }]
+          }));
+          tableRows.push({ type: 'tableRow', content: headerCells });
+          
+          i++; // Skip separator line
+          i++; // Move to first data row
+          
+          // Data rows
+          while (i < lines.length) {
+            const dataLine = lines[i];
+            if (dataLine.trim().startsWith('|') && dataLine.trim().endsWith('|')) {
+              const rowCells = dataLine.split('|').slice(1, -1).map(c => c.trim());
+              const dataCells = rowCells.map(cell => ({
+                type: 'tableCell',
+                attrs: {},
+                content: [{ type: 'paragraph', content: parseInlineFormatting(cell) }]
+              }));
+              tableRows.push({ type: 'tableRow', content: dataCells });
+              i++;
+            } else {
+              break;
+            }
+          }
+          
+          content.push({ type: 'table', content: tableRows });
+          i--; // Back up one since the while loop will increment
+        } else {
+          // Not a table, treat as paragraph
+          const parsed = parseInlineFormatting(line);
+          content.push({
+            type: 'paragraph',
+            content: parsed.length > 0 ? parsed : []
+          });
+        }
+      } else {
+        // Last line, not a table
+        const parsed = parseInlineFormatting(line);
+        content.push({
+          type: 'paragraph',
+          content: parsed.length > 0 ? parsed : []
+        });
+      }
+    }
     // Empty lines
     else if (line.trim() === '') {
       if (content.length > 0 && content[content.length - 1].type === 'paragraph') {
