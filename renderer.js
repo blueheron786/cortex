@@ -47,8 +47,7 @@ function initEditor() {
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3, 4, 5, 6]
-        },
-        listItem: false // Disable default list item to allow TaskItem
+        }
       }),
       Table.configure({
         resizable: true,
@@ -83,6 +82,84 @@ function initEditor() {
   });
 }
 
+// Helper to convert markdown to TipTap JSON
+function markdownToTiptap(markdown) {
+  const lines = markdown.split('\n');
+  const content = [];
+  let i = 0;
+  
+  while (i < lines.length) {
+    const line = lines[i];
+    
+    // Headers
+    if (line.startsWith('# ')) {
+      content.push({ type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: line.slice(2) }] });
+    } else if (line.startsWith('## ')) {
+      content.push({ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: line.slice(3) }] });
+    } else if (line.startsWith('### ')) {
+      content.push({ type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: line.slice(4) }] });
+    } else if (line.startsWith('#### ')) {
+      content.push({ type: 'heading', attrs: { level: 4 }, content: [{ type: 'text', text: line.slice(5) }] });
+    } else if (line.startsWith('##### ')) {
+      content.push({ type: 'heading', attrs: { level: 5 }, content: [{ type: 'text', text: line.slice(6) }] });
+    } else if (line.startsWith('###### ')) {
+      content.push({ type: 'heading', attrs: { level: 6 }, content: [{ type: 'text', text: line.slice(7) }] });
+    }
+    // Task items
+    else if (line.match(/^- \[([ x])\] /)) {
+      const checked = line[3] === 'x';
+      const text = line.slice(6);
+      if (content.length === 0 || content[content.length - 1].type !== 'taskList') {
+        content.push({ type: 'taskList', content: [] });
+      }
+      content[content.length - 1].content.push({
+        type: 'taskItem',
+        attrs: { checked },
+        content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+      });
+    }
+    // Regular list items
+    else if (line.startsWith('- ') || line.startsWith('* ')) {
+      const text = line.slice(2);
+      if (content.length === 0 || content[content.length - 1].type !== 'bulletList') {
+        content.push({ type: 'bulletList', content: [] });
+      }
+      content[content.length - 1].content.push({
+        type: 'listItem',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+      });
+    }
+    // Empty lines
+    else if (line.trim() === '') {
+      if (content.length > 0 && content[content.length - 1].type === 'paragraph') {
+        // Don't add multiple empty paragraphs
+      } else {
+        content.push({ type: 'paragraph' });
+      }
+    }
+    // Regular paragraphs
+    else {
+      const marks = [];
+      let text = line;
+      
+      // Handle highlights
+      if (text.includes('==')) {
+        text = text.replace(/==/g, '');
+        marks.push({ type: 'highlight' });
+      }
+      
+      content.push({
+        type: 'paragraph',
+        content: text ? [{ type: 'text', text, marks: marks.length ? marks : undefined }] : []
+      });
+    }
+    
+    i++;
+  }
+  
+  return { type: 'doc', content: content.length ? content : [{ type: 'paragraph' }] };
+}
+
 // File operations
 async function openFile(filePath) {
   if (!filePath.endsWith('.md')) return;
@@ -91,17 +168,10 @@ async function openFile(filePath) {
   if (markdown !== null) {
     currentFilePath = filePath;
     
-    // Parse markdown with custom handling for highlights and checkboxes
-    let processedMarkdown = markdown
-      .replace(/==([^=]+)==/g, '<mark>$1</mark>') // Convert ==highlight== to <mark>
-      .replace(/- \[([ x])\] /g, (match, check) => {
-        return check === 'x' 
-          ? '<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked><span></span></label><div>'
-          : '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div>';
-      });
+    // Convert markdown to TipTap JSON structure
+    const json = markdownToTiptap(markdown);
+    editor.commands.setContent(json);
     
-    const html = marked.parse(processedMarkdown);
-    editor.commands.setContent(html);
     document.querySelector('#editor-header').textContent = filePath.split(/[\\/]/).pop();
     
     // Update active file in tree
