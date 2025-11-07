@@ -25375,27 +25375,45 @@ Please report this to https://github.com/markedjs/marked.`, e) {
   async function saveFile() {
     if (!currentFilePath) return;
     const html = editor.getHTML();
-    const markdown = turndownService.turndown(html);
+    let markdown = turndownService.turndown(html);
+    markdown = markdown.replace(/\\\[/g, "[").replace(/\\\]/g, "]").replace(/\\\*/g, "*");
     const success = await window.api.writeFile(currentFilePath, markdown);
     if (!success) {
       console.error("Failed to save file");
     }
   }
   function renderFileTree(items, container, level = 0) {
-    container.innerHTML = "";
+    if (level === 0) {
+      container.innerHTML = "";
+    }
     items.forEach((item) => {
       const itemDiv = document.createElement("div");
       if (item.isDirectory) {
         itemDiv.className = "folder-item";
-        itemDiv.textContent = "\u{1F4C1} " + item.name;
+        const folderName = item.name;
         itemDiv.style.paddingLeft = level * 12 + "px";
+        itemDiv.style.cursor = "pointer";
         if (item.children && item.children.length > 0) {
           const childrenDiv = document.createElement("div");
           childrenDiv.className = "folder-children";
+          childrenDiv.style.display = "none";
+          const icon = document.createElement("span");
+          icon.textContent = "\u25B6 ";
+          const text = document.createElement("span");
+          text.textContent = folderName;
+          itemDiv.appendChild(icon);
+          itemDiv.appendChild(text);
           renderFileTree(item.children, childrenDiv, level + 1);
+          itemDiv.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const isCollapsed = childrenDiv.style.display === "none";
+            childrenDiv.style.display = isCollapsed ? "block" : "none";
+            icon.textContent = isCollapsed ? "\u25BC " : "\u25B6 ";
+          });
           container.appendChild(itemDiv);
           container.appendChild(childrenDiv);
         } else {
+          itemDiv.textContent = "\u25B6 " + folderName;
           container.appendChild(itemDiv);
         }
       } else {

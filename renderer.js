@@ -111,7 +111,14 @@ async function saveFile() {
   if (!currentFilePath) return;
   
   const html = editor.getHTML();
-  const markdown = turndownService.turndown(html);
+  let markdown = turndownService.turndown(html);
+  
+  // Unescape brackets and asterisks that turndown escapes
+  markdown = markdown
+    .replace(/\\\[/g, '[')
+    .replace(/\\\]/g, ']')
+    .replace(/\\\*/g, '*');
+  
   const success = await window.api.writeFile(currentFilePath, markdown);
   if (!success) {
     console.error('Failed to save file');
@@ -120,23 +127,46 @@ async function saveFile() {
 
 // File tree rendering
 function renderFileTree(items, container, level = 0) {
-  container.innerHTML = '';
+  if (level === 0) {
+    container.innerHTML = '';
+  }
   
   items.forEach(item => {
     const itemDiv = document.createElement('div');
     
     if (item.isDirectory) {
       itemDiv.className = 'folder-item';
-      itemDiv.textContent = '📁 ' + item.name;
+      const folderName = item.name;
       itemDiv.style.paddingLeft = (level * 12) + 'px';
+      itemDiv.style.cursor = 'pointer';
       
       if (item.children && item.children.length > 0) {
         const childrenDiv = document.createElement('div');
         childrenDiv.className = 'folder-children';
+        childrenDiv.style.display = 'none'; // Start collapsed
+        
+        // Create icon and text separately
+        const icon = document.createElement('span');
+        icon.textContent = '▶ ';
+        const text = document.createElement('span');
+        text.textContent = folderName;
+        itemDiv.appendChild(icon);
+        itemDiv.appendChild(text);
+        
         renderFileTree(item.children, childrenDiv, level + 1);
+        
+        // Toggle folder on click
+        itemDiv.addEventListener('click', (e) => {
+          e.stopPropagation(); // Prevent parent folder clicks from interfering
+          const isCollapsed = childrenDiv.style.display === 'none';
+          childrenDiv.style.display = isCollapsed ? 'block' : 'none';
+          icon.textContent = isCollapsed ? '▼ ' : '▶ ';
+        });
+        
         container.appendChild(itemDiv);
         container.appendChild(childrenDiv);
       } else {
+        itemDiv.textContent = '▶ ' + folderName;
         container.appendChild(itemDiv);
       }
     } else {
