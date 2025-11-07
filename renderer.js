@@ -82,6 +82,70 @@ function initEditor() {
   });
 }
 
+// Parse inline formatting (bold, italic, highlight, code)
+function parseInlineFormatting(text) {
+  const result = [];
+  
+  // Process bold+italic (***), bold (**), italic (*), highlight (==), code (`)
+  const patterns = [
+    { regex: /\*\*\*(.+?)\*\*\*/g, marks: [{ type: 'bold' }, { type: 'italic' }] },
+    { regex: /\*\*(.+?)\*\*/g, marks: [{ type: 'bold' }] },
+    { regex: /\*(.+?)\*/g, marks: [{ type: 'italic' }] },
+    { regex: /==(.+?)==/g, marks: [{ type: 'highlight' }] },
+    { regex: /`(.+?)`/g, marks: [{ type: 'code' }] }
+  ];
+  
+  let segments = [{ text, marks: [] }];
+  
+  for (const pattern of patterns) {
+    const newSegments = [];
+    for (const seg of segments) {
+      if (seg.marks.some(m => m.type === 'code')) {
+        newSegments.push(seg);
+        continue;
+      }
+      
+      let lastIndex = 0;
+      const matches = [...seg.text.matchAll(pattern.regex)];
+      
+      if (matches.length === 0) {
+        newSegments.push(seg);
+        continue;
+      }
+      
+      for (const match of matches) {
+        if (match.index > lastIndex) {
+          newSegments.push({
+            text: seg.text.slice(lastIndex, match.index),
+            marks: [...seg.marks]
+          });
+        }
+        newSegments.push({
+          text: match[1],
+          marks: [...seg.marks, ...pattern.marks]
+        });
+        lastIndex = match.index + match[0].length;
+      }
+      
+      if (lastIndex < seg.text.length) {
+        newSegments.push({
+          text: seg.text.slice(lastIndex),
+          marks: [...seg.marks]
+        });
+      }
+    }
+    segments = newSegments;
+  }
+  
+  return segments
+    .filter(seg => seg.text.length > 0)
+    .map(seg => ({
+      type: 'text',
+      text: seg.text,
+      marks: seg.marks.length > 0 ? seg.marks : undefined
+    }));
+}
+
 // Helper to convert markdown to TipTap JSON
 function markdownToTiptap(markdown) {
   const lines = markdown.split('\n');
@@ -93,17 +157,17 @@ function markdownToTiptap(markdown) {
     
     // Headers
     if (line.startsWith('# ')) {
-      content.push({ type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: line.slice(2) }] });
+      content.push({ type: 'heading', attrs: { level: 1 }, content: parseInlineFormatting(line.slice(2)) });
     } else if (line.startsWith('## ')) {
-      content.push({ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: line.slice(3) }] });
+      content.push({ type: 'heading', attrs: { level: 2 }, content: parseInlineFormatting(line.slice(3)) });
     } else if (line.startsWith('### ')) {
-      content.push({ type: 'heading', attrs: { level: 3 }, content: [{ type: 'text', text: line.slice(4) }] });
+      content.push({ type: 'heading', attrs: { level: 3 }, content: parseInlineFormatting(line.slice(4)) });
     } else if (line.startsWith('#### ')) {
-      content.push({ type: 'heading', attrs: { level: 4 }, content: [{ type: 'text', text: line.slice(5) }] });
+      content.push({ type: 'heading', attrs: { level: 4 }, content: parseInlineFormatting(line.slice(5)) });
     } else if (line.startsWith('##### ')) {
-      content.push({ type: 'heading', attrs: { level: 5 }, content: [{ type: 'text', text: line.slice(6) }] });
+      content.push({ type: 'heading', attrs: { level: 5 }, content: parseInlineFormatting(line.slice(6)) });
     } else if (line.startsWith('###### ')) {
-      content.push({ type: 'heading', attrs: { level: 6 }, content: [{ type: 'text', text: line.slice(7) }] });
+      content.push({ type: 'heading', attrs: { level: 6 }, content: parseInlineFormatting(line.slice(7)) });
     }
     // Task items
     else if (line.match(/^- \[([ x])\] /)) {
@@ -115,7 +179,7 @@ function markdownToTiptap(markdown) {
       content[content.length - 1].content.push({
         type: 'taskItem',
         attrs: { checked },
-        content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+        content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
       });
     }
     // Regular list items
@@ -126,7 +190,7 @@ function markdownToTiptap(markdown) {
       }
       content[content.length - 1].content.push({
         type: 'listItem',
-        content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+        content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
       });
     }
     // Empty lines
@@ -139,18 +203,10 @@ function markdownToTiptap(markdown) {
     }
     // Regular paragraphs
     else {
-      const marks = [];
-      let text = line;
-      
-      // Handle highlights
-      if (text.includes('==')) {
-        text = text.replace(/==/g, '');
-        marks.push({ type: 'highlight' });
-      }
-      
+      const parsed = parseInlineFormatting(line);
       content.push({
         type: 'paragraph',
-        content: text ? [{ type: 'text', text, marks: marks.length ? marks : undefined }] : []
+        content: parsed.length > 0 ? parsed : []
       });
     }
     
