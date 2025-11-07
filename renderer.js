@@ -7,11 +7,37 @@ const TableHeader = require('@tiptap/extension-table-header').default;
 const TaskList = require('@tiptap/extension-task-list').default;
 const TaskItem = require('@tiptap/extension-task-item').default;
 const Highlight = require('@tiptap/extension-highlight').default;
+const { marked } = require('marked');
+const TurndownService = require('turndown');
 
 let editor = null;
 let currentFilePath = null;
 let workspacePath = null;
 let saveTimeout = null;
+
+// Markdown converter
+const turndownService = new TurndownService({
+  headingStyle: 'atx',
+  codeBlockStyle: 'fenced',
+  bulletListMarker: '-'
+});
+
+// Custom rules for turndown
+turndownService.addRule('taskList', {
+  filter: (node) => {
+    return node.nodeName === 'LI' && node.hasAttribute('data-type') && node.getAttribute('data-type') === 'taskItem';
+  },
+  replacement: (content, node) => {
+    const checkbox = node.querySelector('input[type="checkbox"]');
+    const checked = checkbox && checkbox.checked ? 'x' : ' ';
+    return `- [${checked}] ${content}\n`;
+  }
+});
+
+turndownService.addRule('highlight', {
+  filter: ['mark'],
+  replacement: (content) => `==${content}==`
+});
 
 // Initialize editor
 function initEditor() {
@@ -57,10 +83,21 @@ function initEditor() {
 async function openFile(filePath) {
   if (!filePath.endsWith('.md')) return;
   
-  const content = await window.api.readFile(filePath);
-  if (content !== null) {
+  const markdown = await window.api.readFile(filePath);
+  if (markdown !== null) {
     currentFilePath = filePath;
-    editor.commands.setContent(content);
+    
+    // Parse markdown with custom handling for highlights and checkboxes
+    let processedMarkdown = markdown
+      .replace(/==([^=]+)==/g, '<mark>$1</mark>') // Convert ==highlight== to <mark>
+      .replace(/- \[([ x])\] /g, (match, check) => {
+        return check === 'x' 
+          ? '<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked><span></span></label><div>'
+          : '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span></label><div>';
+      });
+    
+    const html = marked.parse(processedMarkdown);
+    editor.commands.setContent(html);
     document.querySelector('#editor-header').textContent = filePath.split(/[\\/]/).pop();
     
     // Update active file in tree
@@ -73,8 +110,9 @@ async function openFile(filePath) {
 async function saveFile() {
   if (!currentFilePath) return;
   
-  const content = editor.getHTML();
-  const success = await window.api.writeFile(currentFilePath, content);
+  const html = editor.getHTML();
+  const markdown = turndownService.turndown(html);
+  const success = await window.api.writeFile(currentFilePath, markdown);
   if (!success) {
     console.error('Failed to save file');
   }
