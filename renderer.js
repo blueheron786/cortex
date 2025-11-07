@@ -1,4 +1,6 @@
 const { Editor } = require('@tiptap/core');
+const { Extension } = require('@tiptap/core');
+const { markInputRule } = require('@tiptap/core');
 const StarterKit = require('@tiptap/starter-kit').default;
 const Table = require('@tiptap/extension-table').default;
 const TableRow = require('@tiptap/extension-table-row').default;
@@ -10,6 +12,53 @@ const Highlight = require('@tiptap/extension-highlight').default;
 const { marked } = require('marked');
 const TurndownService = require('turndown');
 
+// Custom extension for *** (bold + italic)
+const BoldItalic = Extension.create({
+  name: 'boldItalic',
+  
+  addInputRules() {
+    const inputRegex = /(?:^|\s)(\*\*\*(?!\s+\*\*\*)((?:[^*]+))\*\*\*)$/;
+    
+    return [
+      {
+        find: inputRegex,
+        handler: ({ state, range, match }) => {
+          const { tr } = state;
+          const start = range.from;
+          const end = range.to;
+          const capturedText = match[2];
+          
+          if (capturedText) {
+            tr.delete(start, end);
+            const textStart = start;
+            const textEnd = textStart + capturedText.length;
+            tr.insertText(capturedText, textStart);
+            tr.addMark(textStart, textEnd, state.schema.marks.bold.create());
+            tr.addMark(textStart, textEnd, state.schema.marks.italic.create());
+          }
+        },
+      },
+    ];
+  },
+  
+  addKeyboardShortcuts() {
+    return {
+      'Mod-Alt-b': () => {
+        const { bold, italic } = this.editor.schema.marks;
+        const { state } = this.editor;
+        const { from, to } = state.selection;
+        const hasBold = state.doc.rangeHasMark(from, to, bold);
+        const hasItalic = state.doc.rangeHasMark(from, to, italic);
+        
+        if (hasBold && hasItalic) {
+          return this.editor.chain().unsetBold().unsetItalic().run();
+        }
+        return this.editor.chain().setBold().setItalic().run();
+      },
+    };
+  },
+});
+
 let editor = null;
 let currentFilePath = null;
 let workspacePath = null;
@@ -19,7 +68,9 @@ let saveTimeout = null;
 const turndownService = new TurndownService({
   headingStyle: 'atx',
   codeBlockStyle: 'fenced',
-  bulletListMarker: '-'
+  bulletListMarker: '-',
+  emDelimiter: '*',
+  strongDelimiter: '**'
 });
 
 // Custom rules for turndown
@@ -39,6 +90,11 @@ turndownService.addRule('highlight', {
   replacement: (content) => `==${content}==`
 });
 
+// Don't escape asterisks in list items
+turndownService.escape = (text) => {
+  return text; // Don't escape anything - we handle it ourselves
+};
+
 // Initialize editor
 function initEditor() {
   editor = new Editor({
@@ -49,6 +105,7 @@ function initEditor() {
           levels: [1, 2, 3, 4, 5, 6]
         }
       }),
+      BoldItalic,
       Table.configure({
         resizable: true,
         HTMLAttributes: {
@@ -84,66 +141,142 @@ function initEditor() {
 
 // Parse inline formatting (bold, italic, highlight, code)
 function parseInlineFormatting(text) {
-  const result = [];
+  if (!text) return [];
   
-  // Process bold+italic (***), bold (**), italic (*), highlight (==), code (`)
-  const patterns = [
-    { regex: /\*\*\*(.+?)\*\*\*/g, marks: [{ type: 'bold' }, { type: 'italic' }] },
-    { regex: /\*\*(.+?)\*\*/g, marks: [{ type: 'bold' }] },
-    { regex: /\*(.+?)\*/g, marks: [{ type: 'italic' }] },
-    { regex: /==(.+?)==/g, marks: [{ type: 'highlight' }] },
-    { regex: /`(.+?)`/g, marks: [{ type: 'code' }] }
-  ];
+  let result = text;
+  const tokens = [];
   
-  let segments = [{ text, marks: [] }];
+  // First, extract code blocks (they shouldn't be processed)
+  const codeRegex = /`([^`]+)`/g;
+  let match;
+  let offset = 0;
+  const codeBlocks = [];
   
-  for (const pattern of patterns) {
-    const newSegments = [];
-    for (const seg of segments) {
-      if (seg.marks.some(m => m.type === 'code')) {
-        newSegments.push(seg);
-        continue;
-      }
-      
-      let lastIndex = 0;
-      const matches = [...seg.text.matchAll(pattern.regex)];
-      
-      if (matches.length === 0) {
-        newSegments.push(seg);
-        continue;
-      }
-      
-      for (const match of matches) {
-        if (match.index > lastIndex) {
-          newSegments.push({
-            text: seg.text.slice(lastIndex, match.index),
-            marks: [...seg.marks]
-          });
-        }
-        newSegments.push({
-          text: match[1],
-          marks: [...seg.marks, ...pattern.marks]
-        });
-        lastIndex = match.index + match[0].length;
-      }
-      
-      if (lastIndex < seg.text.length) {
-        newSegments.push({
-          text: seg.text.slice(lastIndex),
-          marks: [...seg.marks]
-        });
-      }
-    }
-    segments = newSegments;
+  while ((match = codeRegex.exec(text)) !== null) {
+    codeBlocks.push({ start: match.index, end: match.index + match[0].length, text: match[1] });
   }
   
-  return segments
-    .filter(seg => seg.text.length > 0)
-    .map(seg => ({
-      type: 'text',
-      text: seg.text,
-      marks: seg.marks.length > 0 ? seg.marks : undefined
-    }));
+  // Process formatting in order: *** (bold+italic), ** (bold), * (italic), == (highlight)
+  function applyFormatting(str, start = 0) {
+    const segments = [];
+    let pos = 0;
+    
+    // Check if position is inside a code block
+    const isInCode = (idx) => codeBlocks.some(cb => idx >= cb.start && idx < cb.end);
+    
+    while (pos < str.length) {
+      // Try *** first (bold + italic)
+      if (str.substr(pos, 3) === '***' && !isInCode(start + pos)) {
+        const end = str.indexOf('***', pos + 3);
+        if (end !== -1 && !isInCode(start + end)) {
+          if (pos > 0) {
+            segments.push({ type: 'text', text: str.slice(0, pos) });
+          }
+          segments.push({
+            type: 'text',
+            text: str.slice(pos + 3, end),
+            marks: [{ type: 'bold' }, { type: 'italic' }]
+          });
+          const remaining = str.slice(end + 3);
+          if (remaining) {
+            segments.push(...applyFormatting(remaining, start + end + 3));
+          }
+          return segments;
+        }
+      }
+      
+      // Try ** (bold)
+      if (str.substr(pos, 2) === '**' && !isInCode(start + pos)) {
+        const end = str.indexOf('**', pos + 2);
+        if (end !== -1 && !isInCode(start + end)) {
+          if (pos > 0) {
+            segments.push({ type: 'text', text: str.slice(0, pos) });
+          }
+          segments.push({
+            type: 'text',
+            text: str.slice(pos + 2, end),
+            marks: [{ type: 'bold' }]
+          });
+          const remaining = str.slice(end + 2);
+          if (remaining) {
+            segments.push(...applyFormatting(remaining, start + end + 2));
+          }
+          return segments;
+        }
+      }
+      
+      // Try * (italic)
+      if (str[pos] === '*' && !isInCode(start + pos)) {
+        const end = str.indexOf('*', pos + 1);
+        if (end !== -1 && !isInCode(start + end)) {
+          if (pos > 0) {
+            segments.push({ type: 'text', text: str.slice(0, pos) });
+          }
+          segments.push({
+            type: 'text',
+            text: str.slice(pos + 1, end),
+            marks: [{ type: 'italic' }]
+          });
+          const remaining = str.slice(end + 1);
+          if (remaining) {
+            segments.push(...applyFormatting(remaining, start + end + 1));
+          }
+          return segments;
+        }
+      }
+      
+      // Try == (highlight)
+      if (str.substr(pos, 2) === '==' && !isInCode(start + pos)) {
+        const end = str.indexOf('==', pos + 2);
+        if (end !== -1 && !isInCode(start + end)) {
+          if (pos > 0) {
+            segments.push({ type: 'text', text: str.slice(0, pos) });
+          }
+          segments.push({
+            type: 'text',
+            text: str.slice(pos + 2, end),
+            marks: [{ type: 'highlight' }]
+          });
+          const remaining = str.slice(end + 2);
+          if (remaining) {
+            segments.push(...applyFormatting(remaining, start + end + 2));
+          }
+          return segments;
+        }
+      }
+      
+      // Try ` (code)
+      if (str[pos] === '`' && !isInCode(start + pos)) {
+        const end = str.indexOf('`', pos + 1);
+        if (end !== -1) {
+          if (pos > 0) {
+            segments.push({ type: 'text', text: str.slice(0, pos) });
+          }
+          segments.push({
+            type: 'text',
+            text: str.slice(pos + 1, end),
+            marks: [{ type: 'code' }]
+          });
+          const remaining = str.slice(end + 1);
+          if (remaining) {
+            segments.push(...applyFormatting(remaining, start + end + 1));
+          }
+          return segments;
+        }
+      }
+      
+      pos++;
+    }
+    
+    // No formatting found
+    if (str) {
+      segments.push({ type: 'text', text: str });
+    }
+    return segments;
+  }
+  
+  const segments = applyFormatting(text);
+  return segments.filter(s => s.text);
 }
 
 // Helper to convert markdown to TipTap JSON
@@ -173,25 +306,50 @@ function markdownToTiptap(markdown) {
     else if (line.match(/^- \[([ x])\] /)) {
       const checked = line[3] === 'x';
       const text = line.slice(6);
-      if (content.length === 0 || content[content.length - 1].type !== 'taskList') {
-        content.push({ type: 'taskList', content: [] });
+      const lastItem = content.length > 0 ? content[content.length - 1] : null;
+      
+      // Check if we should add to existing task list or create new one
+      if (lastItem && lastItem.type === 'taskList') {
+        // Add to existing task list
+        lastItem.content.push({
+          type: 'taskItem',
+          attrs: { checked },
+          content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+        });
+      } else {
+        // Create new task list
+        content.push({ 
+          type: 'taskList', 
+          content: [{
+            type: 'taskItem',
+            attrs: { checked },
+            content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+          }]
+        });
       }
-      content[content.length - 1].content.push({
-        type: 'taskItem',
-        attrs: { checked },
-        content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
-      });
     }
     // Regular list items
     else if (line.startsWith('- ') || line.startsWith('* ')) {
       const text = line.slice(2);
-      if (content.length === 0 || content[content.length - 1].type !== 'bulletList') {
-        content.push({ type: 'bulletList', content: [] });
+      const lastItem = content.length > 0 ? content[content.length - 1] : null;
+      
+      // Check if we should add to existing list or create new one
+      if (lastItem && lastItem.type === 'bulletList') {
+        // Add to existing list
+        lastItem.content.push({
+          type: 'listItem',
+          content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+        });
+      } else {
+        // Create new list
+        content.push({ 
+          type: 'bulletList', 
+          content: [{
+            type: 'listItem',
+            content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+          }]
+        });
       }
-      content[content.length - 1].content.push({
-        type: 'listItem',
-        content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
-      });
     }
     // Tables
     else if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
@@ -206,11 +364,17 @@ function markdownToTiptap(markdown) {
           const tableRows = [];
           
           // Header row
-          const headerCells = cells.map(cell => ({
-            type: 'tableHeader',
-            attrs: {},
-            content: [{ type: 'paragraph', content: parseInlineFormatting(cell) }]
-          }));
+          const headerCells = cells.map(cell => {
+            const cellContent = parseInlineFormatting(cell);
+            return {
+              type: 'tableHeader',
+              attrs: {},
+              content: [{ 
+                type: 'paragraph', 
+                content: cellContent.length > 0 ? cellContent : [{ type: 'text', text: '' }]
+              }]
+            };
+          });
           tableRows.push({ type: 'tableRow', content: headerCells });
           
           i++; // Skip separator line
@@ -221,11 +385,17 @@ function markdownToTiptap(markdown) {
             const dataLine = lines[i];
             if (dataLine.trim().startsWith('|') && dataLine.trim().endsWith('|')) {
               const rowCells = dataLine.split('|').slice(1, -1).map(c => c.trim());
-              const dataCells = rowCells.map(cell => ({
-                type: 'tableCell',
-                attrs: {},
-                content: [{ type: 'paragraph', content: parseInlineFormatting(cell) }]
-              }));
+              const dataCells = rowCells.map(cell => {
+                const cellContent = parseInlineFormatting(cell);
+                return {
+                  type: 'tableCell',
+                  attrs: {},
+                  content: [{ 
+                    type: 'paragraph', 
+                    content: cellContent.length > 0 ? cellContent : [{ type: 'text', text: '' }]
+                  }]
+                };
+              });
               tableRows.push({ type: 'tableRow', content: dataCells });
               i++;
             } else {
@@ -240,7 +410,7 @@ function markdownToTiptap(markdown) {
           const parsed = parseInlineFormatting(line);
           content.push({
             type: 'paragraph',
-            content: parsed.length > 0 ? parsed : []
+            content: parsed.length > 0 ? parsed : [{ type: 'text', text: '' }]
           });
         }
       } else {
@@ -248,7 +418,7 @@ function markdownToTiptap(markdown) {
         const parsed = parseInlineFormatting(line);
         content.push({
           type: 'paragraph',
-          content: parsed.length > 0 ? parsed : []
+          content: parsed.length > 0 ? parsed : [{ type: 'text', text: '' }]
         });
       }
     }
@@ -302,11 +472,12 @@ async function saveFile() {
   const html = editor.getHTML();
   let markdown = turndownService.turndown(html);
   
-  // Unescape brackets and asterisks that turndown escapes
+  // Unescape brackets, asterisks and underscores that turndown escapes
   markdown = markdown
     .replace(/\\\[/g, '[')
     .replace(/\\\]/g, ']')
-    .replace(/\\\*/g, '*');
+    .replace(/\\\*/g, '*')
+    .replace(/\\_/g, '_');
   
   const success = await window.api.writeFile(currentFilePath, markdown);
   if (!success) {
