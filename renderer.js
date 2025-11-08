@@ -1,6 +1,6 @@
 const { Editor } = require('@tiptap/core');
 const { Extension } = require('@tiptap/core');
-const { markInputRule } = require('@tiptap/core');
+const { TextSelection } = require('@tiptap/pm/state');
 const StarterKit = require('@tiptap/starter-kit').default;
 const Table = require('@tiptap/extension-table').default;
 const TableRow = require('@tiptap/extension-table-row').default;
@@ -35,6 +35,9 @@ const BoldItalic = Extension.create({
             tr.insertText(capturedText, textStart);
             tr.addMark(textStart, textEnd, state.schema.marks.bold.create());
             tr.addMark(textStart, textEnd, state.schema.marks.italic.create());
+            tr.setSelection(TextSelection.create(tr.doc, textEnd));
+            tr.removeStoredMark(state.schema.marks.bold);
+            tr.removeStoredMark(state.schema.marks.italic);
           }
         },
       },
