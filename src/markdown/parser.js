@@ -180,8 +180,12 @@ function markdownToTiptap(markdown) {
   while (i < lines.length) {
     const line = lines[i];
     
+    // Horizontal rule (---, ***, or ___)
+    if (line.trim().match(/^(-{3,}|\*{3,}|_{3,})$/)) {
+      content.push({ type: 'horizontalRule' });
+    }
     // Headers
-    if (line.startsWith('# ')) {
+    else if (line.startsWith('# ')) {
       content.push({ type: 'heading', attrs: { level: 1 }, content: parseInlineFormatting(line.slice(2)) });
     } else if (line.startsWith('## ')) {
       content.push({ type: 'heading', attrs: { level: 2 }, content: parseInlineFormatting(line.slice(3)) });

@@ -174,6 +174,22 @@ describe('createMarkdownSerializer', () => {
     });
   });
 
+  describe('Horizontal Rules', () => {
+    it('should convert hr tag to ---', () => {
+      const html = '<hr>';
+      const result = turndownService.turndown(html);
+      expect(result.trim()).toBe('---');
+    });
+
+    it('should convert hr in context', () => {
+      const html = '<p>Above</p><hr><p>Below</p>';
+      const result = turndownService.turndown(html);
+      expect(result).toContain('Above');
+      expect(result).toContain('---');
+      expect(result).toContain('Below');
+    });
+  });
+
   describe('Strikethrough', () => {
     it('should convert s tag to strikethrough syntax', () => {
       const html = '<p>Text with <s>strikethrough</s></p>';

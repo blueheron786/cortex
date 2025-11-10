@@ -28,6 +28,37 @@ document.querySelector('#open-folder-btn').addEventListener('click', async () =>
   }
 });
 
+// Sidebar resize functionality
+const sidebar = document.querySelector('#sidebar');
+const resizeHandle = document.querySelector('#resize-handle');
+let isResizing = false;
+
+resizeHandle.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  
+  const newWidth = e.clientX;
+  const minWidth = 150;
+  const maxWidth = 600;
+  
+  if (newWidth >= minWidth && newWidth <= maxWidth) {
+    sidebar.style.width = newWidth + 'px';
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }
+});
+
 // Initialize
 async function init() {
   editor = initEditor(() => {

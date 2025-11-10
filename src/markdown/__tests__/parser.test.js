@@ -259,6 +259,39 @@ describe('parseInlineFormatting', () => {
 });
 
 describe('markdownToTiptap', () => {
+  describe('Horizontal Rules', () => {
+    it('should parse --- as horizontal rule', () => {
+      const result = markdownToTiptap('---');
+      expect(result).toEqual({
+        type: 'doc',
+        content: [
+          { type: 'horizontalRule' }
+        ]
+      });
+    });
+
+    it('should parse *** as horizontal rule', () => {
+      const result = markdownToTiptap('***');
+      expect(result.content[0].type).toBe('horizontalRule');
+    });
+
+    it('should parse ___ as horizontal rule', () => {
+      const result = markdownToTiptap('___');
+      expect(result.content[0].type).toBe('horizontalRule');
+    });
+
+    it('should parse horizontal rule with extra dashes', () => {
+      const result = markdownToTiptap('-----');
+      expect(result.content[0].type).toBe('horizontalRule');
+    });
+
+    it('should parse horizontal rule in context', () => {
+      const result = markdownToTiptap('Text above\n\n---\n\nText below');
+      expect(result.content).toHaveLength(5); // para, empty para, hr, empty para, para
+      expect(result.content[2].type).toBe('horizontalRule');
+    });
+  });
+
   describe('Headers', () => {
     it('should parse h1', () => {
       const result = markdownToTiptap('# Heading 1');

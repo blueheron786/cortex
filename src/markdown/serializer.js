@@ -65,6 +65,11 @@ function createMarkdownSerializer() {
     replacement: (content) => `~~${content}~~`
   });
 
+  turndownService.addRule('horizontalRule', {
+    filter: 'hr',
+    replacement: () => '\n---\n\n'
+  });
+
   // Custom list rules to prevent extra newlines
   turndownService.addRule('bulletList', {
     filter: 'ul',
