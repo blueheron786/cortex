@@ -93,6 +93,37 @@ turndownService.addRule('highlight', {
   replacement: (content) => `==${content}==`
 });
 
+// Custom table rule
+turndownService.addRule('table', {
+  filter: 'table',
+  replacement: (content, node) => {
+    const rows = [];
+    const tableRows = node.querySelectorAll('tr');
+    
+    tableRows.forEach((tr, rowIndex) => {
+      const cells = [];
+      const cellElements = tr.querySelectorAll('th, td');
+      
+      cellElements.forEach(cell => {
+        const cellContent = cell.textContent.trim().replace(/\|/g, '\\|');
+        cells.push(cellContent);
+      });
+      
+      if (cells.length > 0) {
+        rows.push('| ' + cells.join(' | ') + ' |');
+        
+        // Add separator after first row (header)
+        if (rowIndex === 0) {
+          const separator = '|' + cells.map(() => '--------').join('|') + '|';
+          rows.push(separator);
+        }
+      }
+    });
+    
+    return '\n' + rows.join('\n') + '\n\n';
+  }
+});
+
 // Don't escape asterisks in list items
 turndownService.escape = (text) => {
   return text; // Don't escape anything - we handle it ourselves
