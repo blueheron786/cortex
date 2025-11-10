@@ -8,6 +8,7 @@ const TaskList = require('@tiptap/extension-task-list').default;
 const TaskItem = require('@tiptap/extension-task-item').default;
 const Highlight = require('@tiptap/extension-highlight').default;
 const { BoldItalic } = require('./extensions');
+const { MarkdownPaste } = require('./markdown-paste');
 
 function initEditor(onUpdate) {
   const editor = new Editor({
@@ -19,6 +20,7 @@ function initEditor(onUpdate) {
         }
       }),
       BoldItalic,
+      MarkdownPaste,
       Table.configure({
         resizable: true,
         HTMLAttributes: {
