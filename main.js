@@ -15,6 +15,7 @@ function createWindow() {
     }
   });
 
+  mainWindow.maximize();
   mainWindow.loadFile('index.html');
 }
 
