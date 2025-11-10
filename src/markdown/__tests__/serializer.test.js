@@ -111,21 +111,21 @@ describe('createMarkdownSerializer', () => {
 
   describe('Task Lists', () => {
     it('should convert unchecked task item', () => {
-      const html = '<li data-type="taskItem"><label><input type="checkbox"><span>Task</span></label></li>';
+      const html = '<li data-type="taskItem"><label contenteditable="false"><input type="checkbox"><span contenteditable="false"></span></label><div><p>Task</p></div></li>';
       const result = turndownService.turndown(html);
       expect(result).toContain('- [ ] Task');
     });
 
     it('should convert checked task item', () => {
-      const html = '<li data-type="taskItem"><label><input type="checkbox" checked><span>Done</span></label></li>';
+      const html = '<li data-type="taskItem"><label contenteditable="false"><input type="checkbox" checked><span contenteditable="false"></span></label><div><p>Done</p></div></li>';
       const result = turndownService.turndown(html);
       expect(result).toContain('- [x] Done');
     });
 
     it('should handle multiple task items', () => {
-      const html = `<ul>
-        <li data-type="taskItem"><label><input type="checkbox"><span>Todo</span></label></li>
-        <li data-type="taskItem"><label><input type="checkbox" checked><span>Done</span></label></li>
+      const html = `<ul data-type="taskList">
+        <li data-type="taskItem"><label contenteditable="false"><input type="checkbox"><span contenteditable="false"></span></label><div><p>Todo</p></div></li>
+        <li data-type="taskItem"><label contenteditable="false"><input type="checkbox" checked><span contenteditable="false"></span></label><div><p>Done</p></div></li>
       </ul>`;
       const result = turndownService.turndown(html);
       expect(result).toContain('- [ ] Todo');
@@ -300,7 +300,7 @@ describe('htmlToMarkdown', () => {
     it('should unescape all special characters', () => {
       const html = '<p>\\[\\]\\*\\_</p>';
       const result = htmlToMarkdown(html, turndownService);
-      expect(result).toBe('[]\\*_');
+      expect(result).toBe('[]*_');
     });
 
     it('should handle text with multiple escaped characters', () => {
@@ -312,7 +312,7 @@ describe('htmlToMarkdown', () => {
 
   describe('Integration with turndown', () => {
     it('should properly convert and unescape task items', () => {
-      const html = '<li data-type="taskItem"><label><input type="checkbox"><span>\\[task\\]</span></label></li>';
+      const html = '<li data-type="taskItem"><label contenteditable="false"><input type="checkbox"><span contenteditable="false"></span></label><div><p>\\[task\\]</p></div></li>';
       const result = htmlToMarkdown(html, turndownService);
       expect(result).toContain('[ ] [task]');
     });

@@ -2,32 +2,37 @@
 function parseInlineFormatting(text) {
   if (!text) return [];
   
-  let result = text;
-  const tokens = [];
-  
-  // First, extract code blocks (they shouldn't be processed)
-  const codeRegex = /`([^`]+)`/g;
-  let match;
-  let offset = 0;
-  const codeBlocks = [];
-  
-  while ((match = codeRegex.exec(text)) !== null) {
-    codeBlocks.push({ start: match.index, end: match.index + match[0].length, text: match[1] });
-  }
-  
-  // Process formatting in order: *** (bold+italic), ** (bold), * (italic), == (highlight)
+  // Process formatting in order: ` (code), *** (bold+italic), ** (bold), * (italic), == (highlight)
+  // Code is checked first so formatting inside backticks is preserved
   function applyFormatting(str, start = 0) {
     const segments = [];
     let pos = 0;
     
-    // Check if position is inside a code block
-    const isInCode = (idx) => codeBlocks.some(cb => idx >= cb.start && idx < cb.end);
-    
     while (pos < str.length) {
+      // Check for code first (backticks)
+      if (str[pos] === '`') {
+        const end = str.indexOf('`', pos + 1);
+        if (end !== -1) {
+          if (pos > 0) {
+            segments.push({ type: 'text', text: str.slice(0, pos) });
+          }
+          segments.push({
+            type: 'text',
+            text: str.slice(pos + 1, end),
+            marks: [{ type: 'code' }]
+          });
+          const remaining = str.slice(end + 1);
+          if (remaining) {
+            segments.push(...applyFormatting(remaining, start + end + 1));
+          }
+          return segments;
+        }
+      }
+      
       // Try *** first (bold + italic)
-      if (str.substr(pos, 3) === '***' && !isInCode(start + pos)) {
+      if (str.substr(pos, 3) === '***') {
         const end = str.indexOf('***', pos + 3);
-        if (end !== -1 && !isInCode(start + end)) {
+        if (end !== -1) {
           if (pos > 0) {
             segments.push({ type: 'text', text: str.slice(0, pos) });
           }
@@ -45,9 +50,9 @@ function parseInlineFormatting(text) {
       }
       
       // Try ** (bold)
-      if (str.substr(pos, 2) === '**' && !isInCode(start + pos)) {
+      if (str.substr(pos, 2) === '**') {
         const end = str.indexOf('**', pos + 2);
-        if (end !== -1 && !isInCode(start + end)) {
+        if (end !== -1) {
           if (pos > 0) {
             segments.push({ type: 'text', text: str.slice(0, pos) });
           }
@@ -65,9 +70,9 @@ function parseInlineFormatting(text) {
       }
       
       // Try * (italic)
-      if (str[pos] === '*' && !isInCode(start + pos)) {
+      if (str[pos] === '*') {
         const end = str.indexOf('*', pos + 1);
-        if (end !== -1 && !isInCode(start + end)) {
+        if (end !== -1) {
           if (pos > 0) {
             segments.push({ type: 'text', text: str.slice(0, pos) });
           }
@@ -85,9 +90,9 @@ function parseInlineFormatting(text) {
       }
       
       // Try == (highlight)
-      if (str.substr(pos, 2) === '==' && !isInCode(start + pos)) {
+      if (str.substr(pos, 2) === '==') {
         const end = str.indexOf('==', pos + 2);
-        if (end !== -1 && !isInCode(start + end)) {
+        if (end !== -1) {
           if (pos > 0) {
             segments.push({ type: 'text', text: str.slice(0, pos) });
           }
@@ -99,26 +104,6 @@ function parseInlineFormatting(text) {
           const remaining = str.slice(end + 2);
           if (remaining) {
             segments.push(...applyFormatting(remaining, start + end + 2));
-          }
-          return segments;
-        }
-      }
-      
-      // Try ` (code)
-      if (str[pos] === '`' && !isInCode(start + pos)) {
-        const end = str.indexOf('`', pos + 1);
-        if (end !== -1) {
-          if (pos > 0) {
-            segments.push({ type: 'text', text: str.slice(0, pos) });
-          }
-          segments.push({
-            type: 'text',
-            text: str.slice(pos + 1, end),
-            marks: [{ type: 'code' }]
-          });
-          const remaining = str.slice(end + 1);
-          if (remaining) {
-            segments.push(...applyFormatting(remaining, start + end + 1));
           }
           return segments;
         }
@@ -283,8 +268,10 @@ function markdownToTiptap(markdown) {
     }
     // Empty lines
     else if (line.trim() === '') {
-      if (content.length > 0 && content[content.length - 1].type === 'paragraph') {
-        // Don't add multiple empty paragraphs
+      const lastItem = content.length > 0 ? content[content.length - 1] : null;
+      // Don't add multiple consecutive empty paragraphs
+      if (lastItem && lastItem.type === 'paragraph' && (!lastItem.content || lastItem.content.length === 0)) {
+        // Last item is already an empty paragraph, skip
       } else {
         content.push({ type: 'paragraph' });
       }

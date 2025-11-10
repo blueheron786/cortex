@@ -17,7 +17,10 @@ function createMarkdownSerializer() {
     replacement: (content, node) => {
       const checkbox = node.querySelector('input[type="checkbox"]');
       const checked = checkbox && checkbox.checked ? 'x' : ' ';
-      return `- [${checked}] ${content}\n`;
+      // Get text content from the div wrapper, skipping the label
+      const textDiv = node.querySelector('div');
+      const textContent = textDiv ? textDiv.textContent.trim() : content.trim();
+      return `- [${checked}] ${textContent}\n`;
     }
   });
 
@@ -42,7 +45,13 @@ function createMarkdownSerializer() {
   });
 
   turndownService.addRule('listItem', {
-    filter: 'li',
+    filter: (node) => {
+      // Don't process task items (they're handled by taskList rule)
+      if (node.nodeName === 'LI' && node.hasAttribute('data-type') && node.getAttribute('data-type') === 'taskItem') {
+        return false;
+      }
+      return node.nodeName === 'LI';
+    },
     replacement: (content, node, options) => {
       content = content.trim();
       
@@ -63,10 +72,11 @@ function createMarkdownSerializer() {
     }
   });
 
-  // Custom table rule
+  // Custom table rule - store service reference in closure
+  const tableServiceRef = turndownService;
   turndownService.addRule('table', {
     filter: 'table',
-    replacement: (content, node) => {
+    replacement: function(content, node) {
       const rows = [];
       const tableRows = Array.from(node.querySelectorAll('tr'));
       
@@ -75,8 +85,9 @@ function createMarkdownSerializer() {
         const cellElements = tr.querySelectorAll('th, td');
         
         cellElements.forEach(cell => {
-          const cellContent = cell.textContent.trim().replace(/\|/g, '\\|');
-          cells.push(cellContent);
+          // Process cell HTML content through turndown to preserve formatting
+          const cellMarkdown = tableServiceRef.turndown(cell.innerHTML).trim().replace(/\|/g, '\\|');
+          cells.push(cellMarkdown);
         });
         
         if (cells.length > 0) {
