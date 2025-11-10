@@ -39,35 +39,32 @@ ipcMain.handle('open-folder', async () => {
 
 ipcMain.handle('read-dir', async (_, dirPath) => {
   try {
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
-    const items = await Promise.all(
-      entries
-        .filter(e => !e.name.startsWith('.'))
-        .map(async entry => {
-          const fullPath = path.join(dirPath, entry.name);
-          const item = {
-            name: entry.name,
-            path: fullPath,
-            isDirectory: entry.isDirectory()
-          };
-          if (entry.isDirectory()) {
-            const subEntries = await fs.readdir(fullPath, { withFileTypes: true });
-            item.children = subEntries
-              .filter(e => !e.name.startsWith('.'))
-              .map(e => ({
-                name: e.name,
-                path: path.join(fullPath, e.name),
-                isDirectory: e.isDirectory()
-              }));
-          }
-          return item;
-        })
-    );
-    return items.sort((a, b) => {
-      if (a.isDirectory && !b.isDirectory) return -1;
-      if (!a.isDirectory && b.isDirectory) return 1;
-      return a.name.localeCompare(b.name);
-    });
+    async function readDirRecursive(dirPath) {
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      const items = await Promise.all(
+        entries
+          .filter(e => !e.name.startsWith('.'))
+          .map(async entry => {
+            const fullPath = path.join(dirPath, entry.name);
+            const item = {
+              name: entry.name,
+              path: fullPath,
+              isDirectory: entry.isDirectory()
+            };
+            if (entry.isDirectory()) {
+              item.children = await readDirRecursive(fullPath);
+            }
+            return item;
+          })
+      );
+      return items.sort((a, b) => {
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    
+    return await readDirRecursive(dirPath);
   } catch (err) {
     return [];
   }
