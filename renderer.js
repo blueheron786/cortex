@@ -30,8 +30,8 @@ document.querySelector('#open-folder-btn').addEventListener('click', async () =>
 
 // Initialize
 async function init() {
-  editor = initEditor({
-    editor: () => setupAutoSave(editor, turndownService)()
+  editor = initEditor(() => {
+    setupAutoSave(editor, turndownService)();
   });
   
   // Load last workspace
