@@ -128,6 +128,8 @@ function markdownToTiptap(markdown) {
   const lines = markdown.split('\n');
   const content = [];
   let i = 0;
+  // local stack for nested task lists (per markdownToTiptap call)
+  let _taskStack = [];
   
   while (i < lines.length) {
     const line = lines[i];
@@ -146,30 +148,127 @@ function markdownToTiptap(markdown) {
     } else if (line.startsWith('###### ')) {
       content.push({ type: 'heading', attrs: { level: 6 }, content: parseInlineFormatting(line.slice(7)) });
     }
-    // Task items
-    else if (line.match(/^- \[([ x])\] /)) {
-      const checked = line[3] === 'x';
-      const text = line.slice(6);
-      const lastItem = content.length > 0 ? content[content.length - 1] : null;
-      
-      // Check if we should add to existing task list or create new one
-      if (lastItem && lastItem.type === 'taskList') {
-        // Add to existing task list
-        lastItem.content.push({
-          type: 'taskItem',
-          attrs: { checked },
-          content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
-        });
-      } else {
-        // Create new task list
-        content.push({ 
-          type: 'taskList', 
-          content: [{
+    // Task items (support nested via leading spaces)
+    else if (line.match(/^\s*- \[([ x])\] /)) {
+      // Count leading spaces to determine nesting level (every 2 spaces = one level)
+      const leading = line.match(/^(\s*)/)[1] || '';
+      const indentLevel = Math.floor(leading.replace(/\t/g, '  ').length / 2);
+      const checked = line.trim()[3] === 'x';
+      const text = line.replace(/^\s*- \[[ x]\] /, '');
+
+      // We'll maintain a simple stack of task lists per indent level
+      // Find or create list at this level
+      // Helper: get last item in array
+      const last = (arr) => (arr && arr.length ? arr[arr.length - 1] : null);
+
+  // Use local stack for nested task lists
+  if (!_taskStack) _taskStack = [];
+
+      // If indentLevel is 0, attach to top-level content
+      if (indentLevel === 0) {
+  // Reset stack when we return to top-level
+  _taskStack = [];
+        const lastItem = last(content);
+        if (lastItem && lastItem.type === 'taskList') {
+          lastItem.content.push({
             type: 'taskItem',
             attrs: { checked },
             content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
-          }]
-        });
+          });
+        } else {
+          content.push({
+            type: 'taskList',
+            content: [{
+              type: 'taskItem',
+              attrs: { checked },
+              content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+            }]
+          });
+        }
+        // Push top-level list reference to stack
+        const newTop = last(content);
+        if (newTop && newTop.type === 'taskList') {
+          _taskStack[0] = newTop;
+        }
+      } else {
+        // Nested level > 0
+        // Ensure stack has parent at level-1
+  const parentList = _taskStack[indentLevel - 1] || null;
+
+        if (parentList) {
+          // Parent exists: append a nested taskList under the last taskItem of parentList
+          const parentLastItem = last(parentList.content);
+          if (parentLastItem) {
+            // Check if parentLastItem already has a nested taskList as its last child
+            const existingNested = parentLastItem.content && parentLastItem.content.length && parentLastItem.content[parentLastItem.content.length - 1];
+            if (existingNested && existingNested.type === 'taskList') {
+              existingNested.content.push({
+                type: 'taskItem',
+                attrs: { checked },
+                content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+              });
+              // Update stack
+              _taskStack[indentLevel] = existingNested;
+            } else {
+              // Create a new nested taskList and attach to parentLastItem.content
+              const nested = {
+                type: 'taskList',
+                content: [{
+                  type: 'taskItem',
+                  attrs: { checked },
+                  content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+                }]
+              };
+              // Ensure parentLastItem.content exists
+              parentLastItem.content = parentLastItem.content || [];
+              parentLastItem.content.push(nested);
+              // Update stack
+              _taskStack[indentLevel] = nested;
+            }
+          } else {
+            // No parent last item — fall back to creating top-level list
+            const lastItem = last(content);
+            if (lastItem && lastItem.type === 'taskList') {
+              lastItem.content.push({
+                type: 'taskItem',
+                attrs: { checked },
+                content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+              });
+              _taskStack[indentLevel] = lastItem;
+            } else {
+              content.push({
+                type: 'taskList',
+                content: [{
+                  type: 'taskItem',
+                  attrs: { checked },
+                  content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+                }]
+              });
+              this._taskStack[indentLevel] = last(content);
+            }
+          }
+        } else {
+          // No parent found (unexpected indentation) — add as top-level
+          const lastItem = last(content);
+          if (lastItem && lastItem.type === 'taskList') {
+            lastItem.content.push({
+              type: 'taskItem',
+              attrs: { checked },
+              content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+            });
+              _taskStack[0] = lastItem;
+          } else {
+            content.push({
+              type: 'taskList',
+              content: [{
+                type: 'taskItem',
+                attrs: { checked },
+                content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+              }]
+            });
+            _taskStack[0] = last(content);
+          }
+        }
       }
     }
     // Regular list items

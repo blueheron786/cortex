@@ -346,6 +346,26 @@ describe('markdownToTiptap', () => {
       expect(result.content[0].content[2].attrs.checked).toBe(false);
     });
 
+    it('should parse nested task items', () => {
+      const markdown = '- [ ] Parent\n  - [ ] Child 1\n  - [x] Child 2\n- [x] Another parent';
+      const result = markdownToTiptap(markdown);
+
+      // Top level should have 2 task items
+      expect(result.content[0].type).toBe('taskList');
+      expect(result.content[0].content).toHaveLength(2);
+
+      const parent = result.content[0].content[0];
+      expect(parent.type).toBe('taskItem');
+      // Parent should contain a nested taskList as one of its children
+      const nested = parent.content.find(c => c.type === 'taskList' || (c.content && c.content.some(cc => cc.type === 'taskList')));
+      // Verify nested exists and has two children with correct checked values
+      const nestedList = nested && (nested.type === 'taskList' ? nested : nested.content.find(cc => cc.type === 'taskList'));
+      expect(nestedList).toBeDefined();
+      expect(nestedList.content).toHaveLength(2);
+      expect(nestedList.content[0].attrs.checked).toBe(false);
+      expect(nestedList.content[1].attrs.checked).toBe(true);
+    });
+
     it('should parse task items with formatting', () => {
       const result = markdownToTiptap('- [x] **Done** task');
       expect(result.content[0].content[0].content[0].content[0]).toEqual({
