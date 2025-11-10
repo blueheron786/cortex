@@ -310,6 +310,22 @@ describe('markdownToTiptap', () => {
       expect(result.content[2].type).toBe('paragraph');
       expect(result.content[4].type).toBe('bulletList');
     });
+
+    it('should parse nested bullet lists', () => {
+      const markdown = '- Parent\n  - Child 1\n  - Child 2\n- Another parent';
+      const result = markdownToTiptap(markdown);
+      
+      expect(result.content[0].type).toBe('bulletList');
+      expect(result.content[0].content).toHaveLength(2);
+      
+      const parent = result.content[0].content[0];
+      expect(parent.type).toBe('listItem');
+      
+      // Parent should have nested bulletList
+      const nestedList = parent.content.find(c => c.type === 'bulletList');
+      expect(nestedList).toBeDefined();
+      expect(nestedList.content).toHaveLength(2);
+    });
   });
 
   describe('Task Lists', () => {
@@ -364,6 +380,48 @@ describe('markdownToTiptap', () => {
       expect(nestedList.content).toHaveLength(2);
       expect(nestedList.content[0].attrs.checked).toBe(false);
       expect(nestedList.content[1].attrs.checked).toBe(true);
+    });
+
+    it('should parse mixed nested task items and regular list items', () => {
+      const markdown = '- [ ] Parent task\n  - [ ] Nested checkbox\n  - Regular nested item 1\n  - Regular nested item 2';
+      const result = markdownToTiptap(markdown);
+
+      expect(result.content[0].type).toBe('taskList');
+      const parentTask = result.content[0].content[0];
+      expect(parentTask.type).toBe('taskItem');
+      
+      // Should have nested taskList and nested bulletList as siblings
+      const nestedTaskList = parentTask.content.find(c => c.type === 'taskList');
+      const nestedBulletList = parentTask.content.find(c => c.type === 'bulletList');
+      
+      expect(nestedTaskList).toBeDefined();
+      expect(nestedTaskList.content).toHaveLength(1);
+      expect(nestedTaskList.content[0].attrs.checked).toBe(false);
+      
+      expect(nestedBulletList).toBeDefined();
+      expect(nestedBulletList.content).toHaveLength(2);
+    });
+
+    it('should parse task items nested under bullet list items', () => {
+      const markdown = '- one\n- two\n- three\n- four\n  - [x] checked box\n  - a\n  - b\n  - c';
+      const result = markdownToTiptap(markdown);
+
+      expect(result.content[0].type).toBe('bulletList');
+      expect(result.content[0].content).toHaveLength(4);
+      
+      const fourthItem = result.content[0].content[3];
+      expect(fourthItem.type).toBe('listItem');
+      
+      // Should have nested taskList and nested bulletList as siblings
+      const nestedTaskList = fourthItem.content.find(c => c.type === 'taskList');
+      const nestedBulletList = fourthItem.content.find(c => c.type === 'bulletList');
+      
+      expect(nestedTaskList).toBeDefined();
+      expect(nestedTaskList.content).toHaveLength(1);
+      expect(nestedTaskList.content[0].attrs.checked).toBe(true);
+      
+      expect(nestedBulletList).toBeDefined();
+      expect(nestedBulletList.content).toHaveLength(3);
     });
 
     it('should parse task items with formatting', () => {

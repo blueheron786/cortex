@@ -128,8 +128,9 @@ function markdownToTiptap(markdown) {
   const lines = markdown.split('\n');
   const content = [];
   let i = 0;
-  // local stack for nested task lists (per markdownToTiptap call)
+  // local stacks for nested lists (per markdownToTiptap call)
   let _taskStack = [];
+  let _bulletStack = [];
   
   while (i < lines.length) {
     const line = lines[i];
@@ -193,7 +194,8 @@ function markdownToTiptap(markdown) {
       } else {
         // Nested level > 0
         // Ensure stack has parent at level-1
-  const parentList = _taskStack[indentLevel - 1] || null;
+        // Check both task and bullet stack for parent (for mixed nesting)
+  const parentList = _taskStack[indentLevel - 1] || _bulletStack[indentLevel - 1] || null;
 
         if (parentList) {
           // Parent exists: append a nested taskList under the last taskItem of parentList
@@ -271,27 +273,112 @@ function markdownToTiptap(markdown) {
         }
       }
     }
-    // Regular list items
-    else if (line.startsWith('- ') || line.startsWith('* ')) {
-      const text = line.slice(2);
-      const lastItem = content.length > 0 ? content[content.length - 1] : null;
+    // Regular list items (support nested via leading spaces)
+    else if (line.match(/^\s*[-*] /)) {
+      // Count leading spaces to determine nesting level
+      const leading = line.match(/^(\s*)/)[1] || '';
+      const indentLevel = Math.floor(leading.replace(/\t/g, '  ').length / 2);
+      const text = line.replace(/^\s*[-*] /, '');
       
-      // Check if we should add to existing list or create new one
-      if (lastItem && lastItem.type === 'bulletList') {
-        // Add to existing list
-        lastItem.content.push({
-          type: 'listItem',
-          content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
-        });
-      } else {
-        // Create new list
-        content.push({ 
-          type: 'bulletList', 
-          content: [{
+      const last = (arr) => (arr && arr.length ? arr[arr.length - 1] : null);
+      
+      // Use a separate stack for bullet lists
+      if (!_bulletStack) _bulletStack = [];
+      
+      if (indentLevel === 0) {
+        // Top-level list item
+        _bulletStack = [];
+        const lastItem = last(content);
+        
+        if (lastItem && lastItem.type === 'bulletList') {
+          lastItem.content.push({
             type: 'listItem',
             content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
-          }]
-        });
+          });
+        } else {
+          content.push({
+            type: 'bulletList',
+            content: [{
+              type: 'listItem',
+              content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+            }]
+          });
+        }
+        
+        const newTop = last(content);
+        if (newTop && newTop.type === 'bulletList') {
+          _bulletStack[0] = newTop;
+        }
+      } else {
+        // Nested list item
+        // Check both bullet and task stack for parent (for mixed nesting)
+        let parentList = _bulletStack[indentLevel - 1] || _taskStack[indentLevel - 1] || null;
+        
+        if (parentList) {
+          const parentLastItem = last(parentList.content);
+          if (parentLastItem) {
+            // Check if parent already has a nested bulletList
+            const existingNested = parentLastItem.content && parentLastItem.content.length && 
+                                   parentLastItem.content[parentLastItem.content.length - 1];
+            if (existingNested && existingNested.type === 'bulletList') {
+              existingNested.content.push({
+                type: 'listItem',
+                content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+              });
+              _bulletStack[indentLevel] = existingNested;
+            } else {
+              // Create new nested bulletList
+              const nested = {
+                type: 'bulletList',
+                content: [{
+                  type: 'listItem',
+                  content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+                }]
+              };
+              parentLastItem.content = parentLastItem.content || [];
+              parentLastItem.content.push(nested);
+              _bulletStack[indentLevel] = nested;
+            }
+          } else {
+            // Fallback to top-level
+            const lastItem = last(content);
+            if (lastItem && lastItem.type === 'bulletList') {
+              lastItem.content.push({
+                type: 'listItem',
+                content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+              });
+              _bulletStack[indentLevel] = lastItem;
+            } else {
+              content.push({
+                type: 'bulletList',
+                content: [{
+                  type: 'listItem',
+                  content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+                }]
+              });
+              _bulletStack[indentLevel] = last(content);
+            }
+          }
+        } else {
+          // No parent - add as top-level
+          const lastItem = last(content);
+          if (lastItem && lastItem.type === 'bulletList') {
+            lastItem.content.push({
+              type: 'listItem',
+              content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+            });
+            _bulletStack[0] = lastItem;
+          } else {
+            content.push({
+              type: 'bulletList',
+              content: [{
+                type: 'listItem',
+                content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
+              }]
+            });
+            _bulletStack[0] = last(content);
+          }
+        }
       }
     }
     // Tables
