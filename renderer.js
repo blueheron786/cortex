@@ -93,6 +93,43 @@ turndownService.addRule('highlight', {
   replacement: (content) => `==${content}==`
 });
 
+// Custom list rules to prevent extra newlines
+turndownService.addRule('bulletList', {
+  filter: 'ul',
+  replacement: (content, node) => {
+    return content;
+  }
+});
+
+turndownService.addRule('orderedList', {
+  filter: 'ol',
+  replacement: (content, node) => {
+    return content;
+  }
+});
+
+turndownService.addRule('listItem', {
+  filter: 'li',
+  replacement: (content, node, options) => {
+    content = content.trim();
+    
+    let prefix = options.bulletListMarker + ' ';
+    
+    // Check if this is part of an ordered list
+    const parent = node.parentNode;
+    if (parent.nodeName === 'OL') {
+      const start = parent.getAttribute('start');
+      const index = Array.prototype.indexOf.call(parent.children, node);
+      prefix = (start ? Number(start) + index : index + 1) + '. ';
+    }
+    
+    // Add newline only if there's a next sibling list item
+    const suffix = node.nextSibling && node.nextSibling.nodeName === 'LI' ? '\n' : '';
+    
+    return prefix + content + suffix;
+  }
+});
+
 // Custom table rule
 turndownService.addRule('table', {
   filter: 'table',
