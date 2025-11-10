@@ -1,4 +1,5 @@
 const { Editor } = require('@tiptap/core');
+const { TextSelection } = require('@tiptap/pm/state');
 const StarterKit = require('@tiptap/starter-kit').default;
 const Table = require('@tiptap/extension-table').default;
 const TableRow = require('@tiptap/extension-table-row').default;
@@ -7,8 +8,9 @@ const TableHeader = require('@tiptap/extension-table-header').default;
 const TaskList = require('@tiptap/extension-task-list').default;
 const TaskItem = require('@tiptap/extension-task-item').default;
 const Highlight = require('@tiptap/extension-highlight').default;
-const { BoldItalic } = require('./extensions');
+const { BoldItalic, TaskListInputRule } = require('./extensions');
 const { MarkdownPaste } = require('./markdown-paste');
+const BulletList = require('@tiptap/extension-bullet-list').default;
 
 function initEditor(onUpdate) {
   const editor = new Editor({
@@ -20,6 +22,7 @@ function initEditor(onUpdate) {
         }
       }),
       BoldItalic,
+      TaskListInputRule,
       MarkdownPaste,
       Table.configure({
         resizable: true,

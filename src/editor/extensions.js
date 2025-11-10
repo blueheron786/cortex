@@ -1,5 +1,69 @@
 const { Extension } = require('@tiptap/core');
 const { TextSelection } = require('@tiptap/pm/state');
+const { Plugin } = require('@tiptap/pm/state');
+
+// Custom extension for creating task lists with - [ ] or - [x]
+const TaskListInputRule = Extension.create({
+  name: 'taskListInputRule',
+  
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          handleTextInput: (view, from, to, text) => {
+            const { state, dispatch } = view;
+            const { doc, tr, selection } = state;
+            const { $from } = selection;
+            
+            // Check if we're in a list item
+            const listItem = $from.node(-1);
+            if (!listItem || listItem.type.name !== 'listItem') {
+              return false;
+            }
+            
+            // Get the bullet list parent
+            const bulletList = $from.node(-2);
+            if (!bulletList || bulletList.type.name !== 'bulletList') {
+              return false;
+            }
+            
+            // Get text content of current list item including the new character
+            const listItemStart = $from.start(-1);
+            const currentText = doc.textBetween(listItemStart, $from.pos, '\n', '\0') + text;
+            
+            // Check if it matches task item patterns
+            const uncheckedMatch = currentText.match(/^\[\s?\] $/);
+            const checkedMatch = currentText.match(/^\[x\] $/i);
+            
+            if (uncheckedMatch || checkedMatch) {
+              const checked = !!checkedMatch;
+              
+              // Get position of the bullet list
+              const bulletListPos = $from.start(-2) - 1;
+              
+              // Create a task list with a task item
+              const taskList = state.schema.nodes.taskList.create(null, [
+                state.schema.nodes.taskItem.create(
+                  { checked },
+                  state.schema.nodes.paragraph.create()
+                )
+              ]);
+              
+              // Replace the bullet list with task list
+              tr.replaceWith(bulletListPos, bulletListPos + bulletList.nodeSize, taskList);
+              tr.setSelection(TextSelection.create(tr.doc, bulletListPos + 2));
+              dispatch(tr);
+              
+              return true;
+            }
+            
+            return false;
+          },
+        },
+      }),
+    ];
+  },
+});
 
 // Custom extension for *** (bold + italic)
 const BoldItalic = Extension.create({
@@ -51,4 +115,4 @@ const BoldItalic = Extension.create({
   },
 });
 
-module.exports = { BoldItalic };
+module.exports = { BoldItalic, TaskListInputRule };
