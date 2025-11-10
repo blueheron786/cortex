@@ -1,3 +1,8 @@
+:root {
+  --primary-color: #4ec9b0;
+  --primary-color-hover: #6fd9c0;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -37,17 +42,18 @@ body {
 }
 
 #open-folder-btn {
-  background: #0e639c;
-  color: #fff;
+  background: var(--primary-color);
+  color: #1e1e1e;
   border: none;
   padding: 4px 8px;
   border-radius: 3px;
   cursor: pointer;
   font-size: 11px;
+  font-weight: 600;
 }
 
 #open-folder-btn:hover {
-  background: #1177bb;
+  background: var(--primary-color-hover);
 }
 
 #file-tree {
@@ -69,12 +75,23 @@ body {
 }
 
 .file-item.active {
-  background: #094771;
+  background: var(--primary-color);
+  color: #1e1e1e;
+  font-weight: 600;
 }
 
 .folder-item {
   font-weight: 500;
   color: #cccccc;
+  padding: 4px 8px;
+  border-radius: 3px;
+  margin: 2px 0;
+}
+
+.folder-item.active {
+  background: var(--primary-color);
+  color: #1e1e1e;
+  font-weight: 600;
 }
 
 .folder-children {
@@ -230,11 +247,11 @@ body {
 }
 
 .ProseMirror a {
-  color: #4ec9b0;
+  color: var(--primary-color);
   text-decoration: underline;
   cursor: pointer;
 }
 
 .ProseMirror a:hover {
-  color: #6fd9c0;
+  color: var(--primary-color-hover);
 }

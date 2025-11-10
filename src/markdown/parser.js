@@ -2,14 +2,39 @@
 function parseInlineFormatting(text) {
   if (!text) return [];
   
-  // Process formatting in order: ` (code), *** (bold+italic), ** (bold), * (italic), == (highlight), ~~ (strikethrough)
-  // Code is checked first so formatting inside backticks is preserved
+  // Process formatting in order: [text](url) (links), ` (code), *** (bold+italic), ** (bold), * (italic), == (highlight), ~~ (strikethrough)
+  // Links and code are checked first so formatting inside them is preserved
   function applyFormatting(str, start = 0) {
     const segments = [];
     let pos = 0;
     
     while (pos < str.length) {
-      // Check for code first (backticks)
+      // Check for markdown links [text](url)
+      if (str[pos] === '[') {
+        const closeBracket = str.indexOf(']', pos + 1);
+        if (closeBracket !== -1 && str[closeBracket + 1] === '(') {
+          const closeParen = str.indexOf(')', closeBracket + 2);
+          if (closeParen !== -1) {
+            if (pos > 0) {
+              segments.push({ type: 'text', text: str.slice(0, pos) });
+            }
+            const linkText = str.slice(pos + 1, closeBracket);
+            const linkUrl = str.slice(closeBracket + 2, closeParen);
+            segments.push({
+              type: 'text',
+              text: linkText,
+              marks: [{ type: 'link', attrs: { href: linkUrl } }]
+            });
+            const remaining = str.slice(closeParen + 1);
+            if (remaining) {
+              segments.push(...applyFormatting(remaining, start + closeParen + 1));
+            }
+            return segments;
+          }
+        }
+      }
+      
+      // Check for code (backticks)
       if (str[pos] === '`') {
         const end = str.indexOf('`', pos + 1);
         if (end !== -1) {

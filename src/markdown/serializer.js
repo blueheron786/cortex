@@ -29,6 +29,11 @@ function createMarkdownSerializer() {
     replacement: (content) => `==${content}==`
   });
 
+  turndownService.addRule('strikethrough', {
+    filter: ['s', 'del', 'strike'],
+    replacement: (content) => `~~${content}~~`
+  });
+
   // Custom list rules to prevent extra newlines
   turndownService.addRule('bulletList', {
     filter: 'ul',

@@ -99,6 +99,86 @@ describe('parseInlineFormatting', () => {
     });
   });
 
+  describe('Strikethrough formatting', () => {
+    it('should parse strikethrough text with ~~', () => {
+      const result = parseInlineFormatting('This is ~~crossed out~~ text');
+      expect(result).toEqual([
+        { type: 'text', text: 'This is ' },
+        { type: 'text', text: 'crossed out', marks: [{ type: 'strike' }] },
+        { type: 'text', text: ' text' }
+      ]);
+    });
+
+    it('should handle multiple strikethroughs', () => {
+      const result = parseInlineFormatting('~~first~~ and ~~second~~');
+      expect(result).toEqual([
+        { type: 'text', text: 'first', marks: [{ type: 'strike' }] },
+        { type: 'text', text: ' and ' },
+        { type: 'text', text: 'second', marks: [{ type: 'strike' }] }
+      ]);
+    });
+
+    it('should handle strikethrough at start', () => {
+      const result = parseInlineFormatting('~~strikethrough~~ text');
+      expect(result).toEqual([
+        { type: 'text', text: 'strikethrough', marks: [{ type: 'strike' }] },
+        { type: 'text', text: ' text' }
+      ]);
+    });
+
+    it('should handle strikethrough at end', () => {
+      const result = parseInlineFormatting('text ~~strikethrough~~');
+      expect(result).toEqual([
+        { type: 'text', text: 'text ' },
+        { type: 'text', text: 'strikethrough', marks: [{ type: 'strike' }] }
+      ]);
+    });
+
+    it('should handle unclosed strikethrough markers', () => {
+      const result = parseInlineFormatting('This is ~~unclosed');
+      // When ~~ is not closed, it's treated as plain text
+      expect(result).toEqual([
+        { type: 'text', text: 'This is ~~unclosed' }
+      ]);
+    });
+  });
+
+  describe('Link formatting', () => {
+    it('should parse markdown links', () => {
+      const result = parseInlineFormatting('Check out [Google](https://google.com) here');
+      expect(result).toEqual([
+        { type: 'text', text: 'Check out ' },
+        { type: 'text', text: 'Google', marks: [{ type: 'link', attrs: { href: 'https://google.com' } }] },
+        { type: 'text', text: ' here' }
+      ]);
+    });
+
+    it('should parse multiple links', () => {
+      const result = parseInlineFormatting('[First](url1) and [Second](url2)');
+      expect(result).toEqual([
+        { type: 'text', text: 'First', marks: [{ type: 'link', attrs: { href: 'url1' } }] },
+        { type: 'text', text: ' and ' },
+        { type: 'text', text: 'Second', marks: [{ type: 'link', attrs: { href: 'url2' } }] }
+      ]);
+    });
+
+    it('should parse link at start', () => {
+      const result = parseInlineFormatting('[Link](url) text');
+      expect(result).toEqual([
+        { type: 'text', text: 'Link', marks: [{ type: 'link', attrs: { href: 'url' } }] },
+        { type: 'text', text: ' text' }
+      ]);
+    });
+
+    it('should parse link at end', () => {
+      const result = parseInlineFormatting('text [Link](url)');
+      expect(result).toEqual([
+        { type: 'text', text: 'text ' },
+        { type: 'text', text: 'Link', marks: [{ type: 'link', attrs: { href: 'url' } }] }
+      ]);
+    });
+  });
+
   describe('Code formatting', () => {
     it('should parse inline code with backticks', () => {
       const result = parseInlineFormatting('This is `code` text');

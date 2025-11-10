@@ -148,6 +148,51 @@ describe('createMarkdownSerializer', () => {
     });
   });
 
+  describe('Strikethrough', () => {
+    it('should convert s tag to strikethrough syntax', () => {
+      const html = '<p>Text with <s>strikethrough</s></p>';
+      const result = turndownService.turndown(html);
+      expect(result).toBe('Text with ~~strikethrough~~');
+    });
+
+    it('should convert del tag to strikethrough syntax', () => {
+      const html = '<p>Text with <del>strikethrough</del></p>';
+      const result = turndownService.turndown(html);
+      expect(result).toBe('Text with ~~strikethrough~~');
+    });
+
+    it('should convert strike tag to strikethrough syntax', () => {
+      const html = '<p>Text with <strike>strikethrough</strike></p>';
+      const result = turndownService.turndown(html);
+      expect(result).toBe('Text with ~~strikethrough~~');
+    });
+
+    it('should handle multiple strikethroughs', () => {
+      const html = '<p><s>First</s> and <s>second</s></p>';
+      const result = turndownService.turndown(html);
+      expect(result).toContain('~~First~~');
+      expect(result).toContain('~~second~~');
+    });
+
+    it('should handle strikethrough at start', () => {
+      const html = '<p><s>Strikethrough</s> text</p>';
+      const result = turndownService.turndown(html);
+      expect(result).toBe('~~Strikethrough~~ text');
+    });
+
+    it('should handle strikethrough at end', () => {
+      const html = '<p>text <s>strikethrough</s></p>';
+      const result = turndownService.turndown(html);
+      expect(result).toBe('text ~~strikethrough~~');
+    });
+
+    it('should handle strikethrough with other formatting', () => {
+      const html = '<p><strong><s>Bold and crossed</s></strong></p>';
+      const result = turndownService.turndown(html);
+      expect(result).toContain('**~~Bold and crossed~~**');
+    });
+  });
+
   describe('Tables', () => {
     it('should convert simple table', () => {
       const html = `<table>
