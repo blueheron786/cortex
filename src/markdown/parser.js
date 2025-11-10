@@ -246,9 +246,16 @@ function markdownToTiptap(markdown) {
           // Parent exists: append a nested taskList under the last taskItem of parentList
           const parentLastItem = last(parentList.content);
           if (parentLastItem) {
-            // Check if parentLastItem already has a nested taskList as its last child
-            const existingNested = parentLastItem.content && parentLastItem.content.length && parentLastItem.content[parentLastItem.content.length - 1];
-            if (existingNested && existingNested.type === 'taskList') {
+            // Ensure parentLastItem.content exists and is an array
+            if (!parentLastItem.content) {
+              parentLastItem.content = [];
+            }
+            
+            // Check if there's already a nested taskList in the content
+            const existingNested = parentLastItem.content.find(c => c.type === 'taskList');
+            
+            if (existingNested) {
+              // Add to existing nested taskList
               existingNested.content.push({
                 type: 'taskItem',
                 attrs: { checked },
@@ -266,8 +273,6 @@ function markdownToTiptap(markdown) {
                   content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
                 }]
               };
-              // Ensure parentLastItem.content exists
-              parentLastItem.content = parentLastItem.content || [];
               parentLastItem.content.push(nested);
               // Update stack
               _taskStack[indentLevel] = nested;
@@ -362,10 +367,16 @@ function markdownToTiptap(markdown) {
         if (parentList) {
           const parentLastItem = last(parentList.content);
           if (parentLastItem) {
-            // Check if parent already has a nested bulletList
-            const existingNested = parentLastItem.content && parentLastItem.content.length && 
-                                   parentLastItem.content[parentLastItem.content.length - 1];
-            if (existingNested && existingNested.type === 'bulletList') {
+            // Ensure parentLastItem.content exists and is an array
+            if (!parentLastItem.content) {
+              parentLastItem.content = [];
+            }
+            
+            // Check if there's already a nested bulletList in the content
+            const existingNested = parentLastItem.content.find(c => c.type === 'bulletList');
+            
+            if (existingNested) {
+              // Add to existing nested bulletList
               existingNested.content.push({
                 type: 'listItem',
                 content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
@@ -380,7 +391,6 @@ function markdownToTiptap(markdown) {
                   content: [{ type: 'paragraph', content: parseInlineFormatting(text) }]
                 }]
               };
-              parentLastItem.content = parentLastItem.content || [];
               parentLastItem.content.push(nested);
               _bulletStack[indentLevel] = nested;
             }

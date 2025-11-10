@@ -462,6 +462,41 @@ describe('markdownToTiptap', () => {
       expect(nestedList.content[1].attrs.checked).toBe(true);
     });
 
+    it('should parse nested task items with proper structure', () => {
+      const markdown = '- [ ] parent node\n  - [ ] child one\n  - [ ] child two';
+      const result = markdownToTiptap(markdown);
+
+      // Should have a taskList at top level
+      expect(result.content[0].type).toBe('taskList');
+      expect(result.content[0].content).toHaveLength(1);
+
+      // Get the parent task item
+      const parentTask = result.content[0].content[0];
+      expect(parentTask.type).toBe('taskItem');
+      expect(parentTask.attrs.checked).toBe(false);
+      
+      // Parent should have both a paragraph and a nested taskList
+      expect(parentTask.content.length).toBeGreaterThanOrEqual(2);
+      
+      const paragraph = parentTask.content.find(c => c.type === 'paragraph');
+      expect(paragraph).toBeDefined();
+      expect(paragraph.content[0].text).toBe('parent node');
+      
+      // Find the nested taskList
+      const nestedTaskList = parentTask.content.find(c => c.type === 'taskList');
+      expect(nestedTaskList).toBeDefined();
+      expect(nestedTaskList.content).toHaveLength(2);
+      
+      // Verify child items
+      expect(nestedTaskList.content[0].type).toBe('taskItem');
+      expect(nestedTaskList.content[0].attrs.checked).toBe(false);
+      expect(nestedTaskList.content[0].content[0].content[0].text).toBe('child one');
+      
+      expect(nestedTaskList.content[1].type).toBe('taskItem');
+      expect(nestedTaskList.content[1].attrs.checked).toBe(false);
+      expect(nestedTaskList.content[1].content[0].content[0].text).toBe('child two');
+    });
+
     it('should parse mixed nested task items and regular list items', () => {
       const markdown = '- [ ] Parent task\n  - [ ] Nested checkbox\n  - Regular nested item 1\n  - Regular nested item 2';
       const result = markdownToTiptap(markdown);

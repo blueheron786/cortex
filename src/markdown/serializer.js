@@ -9,6 +9,9 @@ function createMarkdownSerializer() {
     strongDelimiter: '**'
   });
 
+  // Store service reference for nested content processing
+  const serviceRef = turndownService;
+  
   // Custom rules for turndown
   turndownService.addRule('taskList', {
     filter: (node) => {
@@ -17,10 +20,38 @@ function createMarkdownSerializer() {
     replacement: (content, node) => {
       const checkbox = node.querySelector('input[type="checkbox"]');
       const checked = checkbox && checkbox.checked ? 'x' : ' ';
-      // Get text content from the div wrapper, skipping the label
+      
+      // Get the div wrapper that contains the task content
       const textDiv = node.querySelector('div');
-      const textContent = textDiv ? textDiv.textContent.trim() : content.trim();
-      return `- [${checked}] ${textContent}\n`;
+      if (!textDiv) {
+        return `- [${checked}] ${content.trim()}\n`;
+      }
+      
+      // Process each child of the div
+      let textContent = '';
+      let nestedLists = '';
+      
+      Array.from(textDiv.childNodes).forEach(child => {
+        if (child.nodeName === 'P') {
+          // Just get the paragraph text
+          textContent += child.textContent;
+        } else if (child.nodeName === 'UL' && child.hasAttribute('data-type')) {
+          // This is a nested task list or bullet list - process it through turndown
+          const nestedMarkdown = serviceRef.turndown(child.outerHTML);
+          // Indent each line of the nested content by 2 spaces
+          nestedLists += nestedMarkdown.split('\n').map(line => line ? '  ' + line : '').join('\n');
+        } else if (child.nodeName === 'UL' || child.nodeName === 'OL') {
+          // Regular nested list
+          const nestedMarkdown = serviceRef.turndown(child.outerHTML);
+          nestedLists += nestedMarkdown.split('\n').map(line => line ? '  ' + line : '').join('\n');
+        }
+      });
+      
+      let result = `- [${checked}] ${textContent.trim()}`;
+      if (nestedLists.trim()) {
+        result += '\n' + nestedLists;
+      }
+      return result + '\n';
     }
   });
 
@@ -58,7 +89,22 @@ function createMarkdownSerializer() {
       return node.nodeName === 'LI';
     },
     replacement: (content, node, options) => {
-      content = content.trim();
+      // Split content into text and nested lists
+      let text = '';
+      let nested = '';
+      
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Check if this line is a list item (starts with - or number.)
+        if (line.match(/^\s*[-*\d]+[\.\)]\s/) || line.match(/^\s*-\s*\[/)) {
+          // This and remaining lines are nested content
+          nested = lines.slice(i).join('\n');
+          break;
+        } else if (line.trim()) {
+          text += (text ? ' ' : '') + line.trim();
+        }
+      }
       
       let prefix = options.bulletListMarker + ' ';
       
@@ -70,10 +116,17 @@ function createMarkdownSerializer() {
         prefix = (start ? Number(start) + index : index + 1) + '. ';
       }
       
+      let result = prefix + text;
+      
+      // Add nested content with proper indentation
+      if (nested.trim()) {
+        result += '\n' + nested.split('\n').map(line => line ? '  ' + line : '').join('\n');
+      }
+      
       // Add newline only if there's a next sibling list item
       const suffix = node.nextSibling && node.nextSibling.nodeName === 'LI' ? '\n' : '';
       
-      return prefix + content + suffix;
+      return result + suffix;
     }
   });
 

@@ -131,6 +131,32 @@ describe('createMarkdownSerializer', () => {
       expect(result).toContain('- [ ] Todo');
       expect(result).toContain('- [x] Done');
     });
+
+    it('should handle nested task items with proper indentation', () => {
+      const html = `<ul data-type="taskList">
+        <li data-type="taskItem">
+          <label contenteditable="false"><input type="checkbox"><span contenteditable="false"></span></label>
+          <div>
+            <p>parent node</p>
+            <ul data-type="taskList">
+              <li data-type="taskItem"><label contenteditable="false"><input type="checkbox"><span contenteditable="false"></span></label><div><p>child one</p></div></li>
+              <li data-type="taskItem"><label contenteditable="false"><input type="checkbox"><span contenteditable="false"></span></label><div><p>child two</p></div></li>
+            </ul>
+          </div>
+        </li>
+      </ul>`;
+      const result = turndownService.turndown(html);
+      
+      expect(result).toContain('- [ ] parent node');
+      expect(result).toContain('  - [ ] child one');
+      expect(result).toContain('  - [ ] child two');
+      
+      // Verify the structure with proper line breaks
+      const lines = result.trim().split('\n');
+      expect(lines[0]).toBe('- [ ] parent node');
+      expect(lines[1]).toBe('  - [ ] child one');
+      expect(lines[2]).toBe('  - [ ] child two');
+    });
   });
 
   describe('Highlights', () => {
