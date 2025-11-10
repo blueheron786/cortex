@@ -1,8 +1,8 @@
-// Parse inline formatting (bold, italic, highlight, code)
+// Parse inline formatting (bold, italic, highlight, strikethrough, code)
 function parseInlineFormatting(text) {
   if (!text) return [];
   
-  // Process formatting in order: ` (code), *** (bold+italic), ** (bold), * (italic), == (highlight)
+  // Process formatting in order: ` (code), *** (bold+italic), ** (bold), * (italic), == (highlight), ~~ (strikethrough)
   // Code is checked first so formatting inside backticks is preserved
   function applyFormatting(str, start = 0) {
     const segments = [];
@@ -100,6 +100,26 @@ function parseInlineFormatting(text) {
             type: 'text',
             text: str.slice(pos + 2, end),
             marks: [{ type: 'highlight' }]
+          });
+          const remaining = str.slice(end + 2);
+          if (remaining) {
+            segments.push(...applyFormatting(remaining, start + end + 2));
+          }
+          return segments;
+        }
+      }
+      
+      // Try ~~ (strikethrough)
+      if (str.substr(pos, 2) === '~~') {
+        const end = str.indexOf('~~', pos + 2);
+        if (end !== -1) {
+          if (pos > 0) {
+            segments.push({ type: 'text', text: str.slice(0, pos) });
+          }
+          segments.push({
+            type: 'text',
+            text: str.slice(pos + 2, end),
+            marks: [{ type: 'strike' }]
           });
           const remaining = str.slice(end + 2);
           if (remaining) {

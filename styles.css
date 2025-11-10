@@ -228,3 +228,13 @@ body {
   background: none;
   padding: 0;
 }
+
+.ProseMirror a {
+  color: #4ec9b0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ProseMirror a:hover {
+  color: #6fd9c0;
+}

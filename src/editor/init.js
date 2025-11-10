@@ -1,6 +1,7 @@
 const { Editor } = require('@tiptap/core');
 const { TextSelection } = require('@tiptap/pm/state');
 const StarterKit = require('@tiptap/starter-kit').default;
+const Link = require('@tiptap/extension-link').default;
 const Table = require('@tiptap/extension-table').default;
 const TableRow = require('@tiptap/extension-table-row').default;
 const TableCell = require('@tiptap/extension-table-cell').default;
@@ -24,6 +25,12 @@ function initEditor(onUpdate) {
       BoldItalic,
       TaskListInputRule,
       MarkdownPaste,
+      Link.configure({
+        openOnClick: true,
+        HTMLAttributes: {
+          class: 'editor-link'
+        }
+      }),
       Table.configure({
         resizable: true,
         HTMLAttributes: {
