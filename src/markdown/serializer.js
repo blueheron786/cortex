@@ -68,7 +68,7 @@ function createMarkdownSerializer() {
     filter: 'table',
     replacement: (content, node) => {
       const rows = [];
-      const tableRows = node.querySelectorAll('tr');
+      const tableRows = Array.from(node.querySelectorAll('tr'));
       
       tableRows.forEach((tr, rowIndex) => {
         const cells = [];
