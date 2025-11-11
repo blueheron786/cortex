@@ -27,12 +27,6 @@ const TaskListInputRule = Extension.create({
               return false;
             }
             
-            // Only allow conversion if this is the ONLY item in the bullet list
-            // This prevents the blank line issue when converting items in the middle of a list
-            if (bulletList.childCount > 1) {
-              return false;
-            }
-            
             // Get text content of current list item including the new character
             const listItemStart = $from.start(-1);
             const currentText = doc.textBetween(listItemStart, $from.pos, '\n', '\0') + text;
@@ -44,10 +38,6 @@ const TaskListInputRule = Extension.create({
             if (uncheckedMatch || checkedMatch) {
               const checked = !!checkedMatch;
               
-              // Get the position of the bullet list
-              const bulletListPos = $from.start(-2) - 1;
-              const bulletListEnd = bulletListPos + bulletList.nodeSize;
-              
               // Get all text content from the entire list item (after the match)
               const listItemEndPos = $from.end(-1);
               const fullText = doc.textBetween(listItemStart, listItemEndPos, '\n', '\0');
@@ -58,21 +48,69 @@ const TaskListInputRule = Extension.create({
               const patternLength = currentText.length - 1; // Don't count the space we just typed
               const textAfterCheckbox = fullText.slice(patternLength);
               
-              // Create a task list with a task item containing the remaining content
+              // Create a task item with the remaining content
               const taskItemContent = textAfterCheckbox.trim() 
                 ? [state.schema.nodes.paragraph.create(null, state.schema.text(textAfterCheckbox))]
                 : [state.schema.nodes.paragraph.create()];
               
-              const taskList = state.schema.nodes.taskList.create(null, [
-                state.schema.nodes.taskItem.create({ checked }, taskItemContent)
-              ]);
+              const taskItem = state.schema.nodes.taskItem.create({ checked }, taskItemContent);
               
-              // Replace the entire bullet list (which has only one item) with the task list
-              tr.replaceWith(bulletListPos, bulletListEnd, taskList);
+              // Get the position of the current list item
+              const listItemPos = $from.start(-1) - 1;
+              const listItemEnd = listItemPos + listItem.nodeSize;
+              
+              // Find the index of this list item within the bullet list
+              const listItemIndex = $from.index(-1);
+              
+              // Strategy: Split the bullet list into parts and insert a task list for this item
+              // If this is the only item, just replace the whole bullet list with a task list
+              if (bulletList.childCount === 1) {
+                // Simple case: replace the entire bullet list with a task list
+                const bulletListPos = $from.start(-2) - 1;
+                const bulletListEnd = bulletListPos + bulletList.nodeSize;
+                const taskList = state.schema.nodes.taskList.create(null, [taskItem]);
+                tr.replaceWith(bulletListPos, bulletListEnd, taskList);
+              } else {
+                // Complex case: Extract this item as a separate task list
+                // We'll need to split the bullet list if this item is in the middle
+                const bulletListPos = $from.start(-2) - 1;
+                
+                // Collect all list items before and after this one
+                const itemsBefore = [];
+                const itemsAfter = [];
+                
+                bulletList.forEach((child, offset, index) => {
+                  if (index < listItemIndex) {
+                    itemsBefore.push(child);
+                  } else if (index > listItemIndex) {
+                    itemsAfter.push(child);
+                  }
+                });
+                
+                // Build the replacement nodes
+                const nodes = [];
+                
+                // Add bullet list with items before (if any)
+                if (itemsBefore.length > 0) {
+                  nodes.push(state.schema.nodes.bulletList.create(null, itemsBefore));
+                }
+                
+                // Add task list with the converted item
+                nodes.push(state.schema.nodes.taskList.create(null, [taskItem]));
+                
+                // Add bullet list with items after (if any)
+                if (itemsAfter.length > 0) {
+                  nodes.push(state.schema.nodes.bulletList.create(null, itemsAfter));
+                }
+                
+                // Replace the entire bullet list with the split sections
+                const bulletListEnd = bulletListPos + bulletList.nodeSize;
+                tr.replaceWith(bulletListPos, bulletListEnd, nodes);
+              }
               
               // Set cursor after the content we preserved
-              const finalPos = tr.mapping.map(bulletListPos);
-              const cursorOffset = textAfterCheckbox.length > 0 ? textAfterCheckbox.length + 1 : 2;
+              const finalPos = tr.mapping.map(listItemPos + 1);
+              const cursorOffset = textAfterCheckbox.length > 0 ? textAfterCheckbox.length : 0;
               const newPos = finalPos + cursorOffset;
               tr.setSelection(TextSelection.create(tr.doc, newPos));
               dispatch(tr);

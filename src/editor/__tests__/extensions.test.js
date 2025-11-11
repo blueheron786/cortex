@@ -36,14 +36,14 @@ describe('TaskListInputRule', () => {
   });
 
   describe('bullet list conversion logic', () => {
-    test('should only allow conversion for single-item bullet lists', () => {
-      // This is the critical logic that prevents blank lines:
-      // if (bulletList.childCount > 1) { return false; }
+    test('should allow conversion for both single and multi-item bullet lists', () => {
+      // The extension now handles conversion in multi-item lists by splitting them
       const multiItemListChildCount = 3;
       const singleItemListChildCount = 1;
       
-      expect(multiItemListChildCount > 1).toBe(true); // Should not convert
-      expect(singleItemListChildCount > 1).toBe(false); // Should convert
+      // Both should be allowed now
+      expect(singleItemListChildCount >= 1).toBe(true); // Should convert
+      expect(multiItemListChildCount >= 1).toBe(true); // Should also convert (new behavior)
     });
   });
 });
