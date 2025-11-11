@@ -16,7 +16,13 @@ async function loadWorkspace(folderPath) {
   workspacePath = folderPath;
   const items = await window.api.readDir(folderPath);
   const fileTree = document.querySelector('#file-tree');
-  renderFileTree(items, fileTree, 0, (filePath) => openFile(filePath, editor));
+  
+  // Show empty state if no files
+  if (items.length === 0 && window.api && window.api.isCapacitor === true) {
+    fileTree.innerHTML = '<div class="empty-state">No files yet.<br>Tap <strong>+ New File</strong> to create your first note!</div>';
+  } else {
+    renderFileTree(items, fileTree, 0, (filePath) => openFile(filePath, editor));
+  }
   
   // Update search dialog with new file list
   if (searchDialog) {
@@ -27,50 +33,96 @@ async function loadWorkspace(folderPath) {
   await window.api.writeSettings({ lastWorkspacePath: folderPath });
 }
 
-// Event listeners
-document.querySelector('#open-folder-btn').addEventListener('click', async () => {
-  const folderPath = await window.api.openFolder();
-  if (folderPath) {
-    loadWorkspace(folderPath);
-  }
-});
-
-// Sidebar resize functionality (desktop only)
-const sidebar = document.querySelector('#sidebar');
-const resizeHandle = document.querySelector('#resize-handle');
-let isResizing = false;
-
-// Only enable resize on desktop
-if (!window.api.isCapacitor) {
-  resizeHandle.addEventListener('mousedown', (e) => {
-    isResizing = true;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  });
-
-  document.addEventListener('mousemove', (e) => {
-    if (!isResizing) return;
-    
-    const newWidth = e.clientX;
-    const minWidth = 150;
-    const maxWidth = 600;
-    
-    if (newWidth >= minWidth && newWidth <= maxWidth) {
-      sidebar.style.width = newWidth + 'px';
-    }
-  });
-
-  document.addEventListener('mouseup', () => {
-    if (isResizing) {
-      isResizing = false;
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
-  });
-}
-
 // Initialize
 async function init() {
+  // Setup event listeners first
+  const openFolderBtn = document.querySelector('#open-folder-btn');
+  console.log('Open folder button found:', openFolderBtn);
+  console.log('window.api at init:', window.api);
+
+  if (openFolderBtn) {
+    openFolderBtn.addEventListener('click', async () => {
+      console.log('Open folder clicked');
+      console.log('window.api:', window.api);
+      console.log('window.api.isCapacitor:', window.api?.isCapacitor);
+      console.log('window.api.isElectron:', window.api?.isElectron);
+      
+      // Check if running on Capacitor (mobile) or Electron (desktop)
+      if (window.api && window.api.isCapacitor === true) {
+        // On mobile, show info about where files are stored
+        alert('Your files are stored in:\nDocuments/cortex-vault/\n\nYou can access them with any file manager app on your device.');
+      } else {
+        // On desktop, open folder picker
+        console.log('Calling openFolder...');
+        const folderPath = await window.api.openFolder();
+        console.log('Got folder path:', folderPath);
+        if (folderPath) {
+          await loadWorkspace(folderPath);
+        }
+      }
+    });
+  }
+
+  // New file button (mobile only)
+  const newFileBtn = document.querySelector('#new-file-btn');
+  if (newFileBtn) {
+    newFileBtn.addEventListener('click', async () => {
+      const fileName = prompt('Enter new file name (without .md):');
+      if (!fileName) return;
+      
+      const sanitizedName = fileName.trim().replace(/[^a-zA-Z0-9-_\s]/g, '');
+      if (!sanitizedName) {
+        alert('Invalid file name');
+        return;
+      }
+      
+      const filePath = workspacePath ? `${workspacePath}/${sanitizedName}.md` : `${sanitizedName}.md`;
+      const success = await window.api.writeFile(filePath, '# ' + sanitizedName + '\n\n');
+      
+      if (success) {
+        // Reload the workspace to show the new file
+        await loadWorkspace(workspacePath);
+        // Open the new file
+        await openFile(filePath, editor);
+      } else {
+        alert('Failed to create file');
+      }
+    });
+  }
+
+  // Sidebar resize functionality (desktop only)
+  const sidebar = document.querySelector('#sidebar');
+  const resizeHandle = document.querySelector('#resize-handle');
+  let isResizing = false;
+
+  // Only enable resize on desktop
+  if (!window.api || window.api.isCapacitor !== true) {
+    resizeHandle.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+      
+      const newWidth = e.clientX;
+      const minWidth = 150;
+      const maxWidth = 600;
+      
+      if (newWidth >= minWidth && newWidth <= maxWidth) {
+        sidebar.style.width = newWidth + 'px';
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    });
+  }
   editor = initEditor(() => {
     setupAutoSave(editor, turndownService)();
   });
@@ -89,14 +141,50 @@ async function init() {
     }
   });
   
-  // On mobile, auto-load the vault folder
-  if (window.api.isCapacitor) {
+  // Mobile-specific UI adjustments
+  if (window.api && window.api.isCapacitor === true) {
+    // Show new file button, change open folder button text
+    document.querySelector('#new-file-btn').classList.remove('hidden');
+    document.querySelector('#open-folder-btn').textContent = 'Storage Info';
+    
+    // Auto-load the vault folder
     const folderPath = await window.api.openFolder();
     if (folderPath) {
       await loadWorkspace(folderPath);
     }
+    
+    // If no files exist, create a welcome file
+    const fileTree = document.querySelector('#file-tree');
+    if (!fileTree.children.length) {
+      const welcomePath = 'cortex-vault/Welcome.md';
+      const welcomeContent = `# Welcome to Cortex on Android! 📱
+
+Your markdown vault is stored in:
+**Documents/cortex-vault/**
+
+## Getting Started
+
+- Tap **+ New File** to create a new note
+- Use **CTRL+P** (or tap search) to quickly find files
+- Your files auto-save as you type
+- Access your files with any file manager app
+
+## Features
+
+✅ Full markdown editing with TipTap
+✅ Quick search across all files
+✅ Auto-save (no need to manually save!)
+✅ Touch-optimized interface
+✅ Task lists, tables, code blocks, and more!
+
+Start typing below or create a new file to get started! ✍️
+`;
+      await window.api.writeFile(welcomePath, welcomeContent);
+      await loadWorkspace(folderPath);
+      await openFile(welcomePath, editor);
+    }
   } else {
-    // On desktop, load last workspace
+    // Desktop: load last workspace
     const settings = await window.api.readSettings();
     if (settings.lastWorkspacePath) {
       loadWorkspace(settings.lastWorkspacePath);

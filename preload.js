@@ -1,10 +1,9 @@
-// Detect if running in Electron or Capacitor
-const isElectron = typeof require !== 'undefined' && typeof window !== 'undefined' && typeof window.process === 'object';
-
-if (isElectron) {
-  // Electron environment
+// This file only runs in Electron's preload context
+// If it's loaded, we're definitely in Electron
+try {
   const { contextBridge, ipcRenderer } = require('electron');
 
+  // Electron environment - expose API to renderer
   contextBridge.exposeInMainWorld('api', {
     openFolder: () => ipcRenderer.invoke('open-folder'),
     readDir: (dirPath) => ipcRenderer.invoke('read-dir', dirPath),
@@ -15,7 +14,8 @@ if (isElectron) {
     isElectron: true,
     isCapacitor: false
   });
-} else {
-  // Capacitor/Web environment - API will be injected from capacitor-api.js
-  console.log('Running in Capacitor/Web environment');
+  
+  console.log('Electron API exposed via preload');
+} catch (error) {
+  console.error('Failed to load Electron preload:', error);
 }
