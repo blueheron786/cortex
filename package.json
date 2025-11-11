@@ -4,13 +4,23 @@
   "main": "main.js",
   "scripts": {
     "build": "node_modules\\.bin\\esbuild renderer.js --bundle --outfile=dist/renderer.js --platform=browser --external:electron",
+    "build:capacitor": "node_modules\\.bin\\esbuild capacitor-main.js --bundle --outfile=www/capacitor-bundle.js --platform=browser --format=esm",
+    "build:web": "npm run build:capacitor && node scripts/copy-web-assets.js",
     "start": "npm run build && node_modules\\.bin\\electron .",
     "dev": "npm run build && node_modules\\.bin\\electron . --dev",
+    "cap:sync": "npx cap sync",
+    "cap:android": "npm run build:web && npx cap sync android && npx cap open android",
+    "cap:serve": "npm run build:web && npx cap serve",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/app": "^7.1.0",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/core": "^7.4.4",
+    "@capacitor/filesystem": "^7.1.4",
     "@tiptap/core": "^2.10.3",
     "@tiptap/extension-highlight": "^2.10.3",
     "@tiptap/extension-link": "^2.27.1",

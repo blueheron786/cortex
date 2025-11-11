@@ -1,0 +1,12 @@
+{
+  "appId": "com.cortex.app",
+  "appName": "Cortex",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
