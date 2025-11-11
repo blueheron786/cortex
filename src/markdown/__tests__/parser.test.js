@@ -580,6 +580,32 @@ describe('markdownToTiptap', () => {
         marks: [{ type: 'bold' }]
       });
     });
+
+    it('should parse task items with links', () => {
+      const result = markdownToTiptap('- [x] Check [link](https://example.com) here');
+      expect(result.content[0].type).toBe('taskList');
+      expect(result.content[0].content[0].attrs.checked).toBe(true);
+      const content = result.content[0].content[0].content[0].content;
+      expect(content).toEqual([
+        { type: 'text', text: 'Check ' },
+        { type: 'text', text: 'link', marks: [{ type: 'link', attrs: { href: 'https://example.com' } }] },
+        { type: 'text', text: ' here' }
+      ]);
+    });
+
+    it('should parse mixed list with first item as checkbox', () => {
+      const markdown = '- [x] First item is checkbox\n- Second regular item\n- Third regular item';
+      const result = markdownToTiptap(markdown);
+
+      // The issue: this creates a taskList and a bulletList separately
+      // They should be together somehow or at least maintain order
+      
+      // What we want: checkbox item should stay first
+      // Currently might end up with: bulletList first, then taskList
+      expect(result.content.length).toBe(2); // Will have 2 lists
+      expect(result.content[0].type).toBe('taskList'); // First should be taskList
+      expect(result.content[1].type).toBe('bulletList'); // Second is bulletList
+    });
   });
 
   describe('Tables', () => {

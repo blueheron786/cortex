@@ -128,10 +128,8 @@ function createMarkdownSerializer() {
         result += '\n' + nested.split('\n').map(line => line ? '  ' + line : '').join('\n');
       }
       
-      // Add newline only if there's a next sibling list item
-      const suffix = node.nextSibling && node.nextSibling.nodeName === 'LI' ? '\n' : '';
-      
-      return result + suffix;
+      // Always add newline after list items to prevent adjacent lists from merging
+      return result + '\n';
     }
   });
 

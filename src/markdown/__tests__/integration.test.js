@@ -114,6 +114,60 @@ describe('Markdown Round-Trip Integration Tests', () => {
       expect(result).toContain('- [ ] unchecked');
       expect(result).toContain('- [x] checked');
     });
+
+    it('should preserve order when first item becomes checkbox (mixed list)', () => {
+      const markdown = '- [x] First item is checkbox\n- Second regular item\n- Third regular item';
+      const json = markdownToTiptap(markdown);
+      
+      // Parser creates two separate lists
+      expect(json.content.length).toBe(2);
+      expect(json.content[0].type).toBe('taskList');
+      expect(json.content[1].type).toBe('bulletList');
+      
+      // Now simulate the HTML that TipTap would produce
+      const html = `<ul data-type="taskList">
+        <li data-type="taskItem"><label contenteditable="false"><input type="checkbox" checked><span contenteditable="false"></span></label><div><p>First item is checkbox</p></div></li>
+      </ul>
+      <ul>
+        <li><p>Second regular item</p></li>
+        <li><p>Third regular item</p></li>
+      </ul>`;
+      
+      const result = htmlToMarkdown(html, turndownService);
+      
+      // The checkbox item should still be first
+      const lines = result.trim().split('\n').filter(l => l.trim());
+      expect(lines[0]).toBe('- [x] First item is checkbox');
+      expect(lines[1]).toBe('- Second regular item');
+      expect(lines[2]).toBe('- Third regular item');
+    });
+
+    it('should preserve order in reverse case (checkbox last)', () => {
+      const markdown = '- First regular item\n- Second regular item\n- [x] Last is checkbox';
+      const json = markdownToTiptap(markdown);
+      
+      // Parser creates bulletList first, then taskList
+      expect(json.content.length).toBe(2);
+      expect(json.content[0].type).toBe('bulletList');
+      expect(json.content[1].type).toBe('taskList');
+      
+      // HTML in that order
+      const html = `<ul>
+        <li><p>First regular item</p></li>
+        <li><p>Second regular item</p></li>
+      </ul>
+      <ul data-type="taskList">
+        <li data-type="taskItem"><label contenteditable="false"><input type="checkbox" checked><span contenteditable="false"></span></label><div><p>Last is checkbox</p></div></li>
+      </ul>`;
+      
+      const result = htmlToMarkdown(html, turndownService);
+      
+      // The order should be preserved
+      const lines = result.trim().split('\n').filter(l => l.trim());
+      expect(lines[0]).toBe('- First regular item');
+      expect(lines[1]).toBe('- Second regular item');
+      expect(lines[2]).toBe('- [x] Last is checkbox');
+    });
   });
 
   describe('Tables', () => {
