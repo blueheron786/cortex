@@ -593,6 +593,18 @@ describe('markdownToTiptap', () => {
       ]);
     });
 
+    it('should handle bullet list item with literal checkbox text', () => {
+      // User manually types "[ ]" in a list item (not converted to task item yet)
+      // This gets saved as a regular list item with "[ ]" text
+      const markdown = '- [ ] list item';
+      const result = markdownToTiptap(markdown);
+      
+      // This SHOULD be parsed as a task item
+      expect(result.content[0].type).toBe('taskList');
+      expect(result.content[0].content[0].attrs.checked).toBe(false);
+      expect(result.content[0].content[0].content[0].content[0].text).toBe('list item');
+    });
+
     it('should parse mixed list with first item as checkbox', () => {
       const markdown = '- [x] First item is checkbox\n- Second regular item\n- Third regular item';
       const result = markdownToTiptap(markdown);

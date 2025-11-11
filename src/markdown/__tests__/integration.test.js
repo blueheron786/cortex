@@ -168,6 +168,44 @@ describe('Markdown Round-Trip Integration Tests', () => {
       expect(lines[1]).toBe('- Second regular item');
       expect(lines[2]).toBe('- [x] Last is checkbox');
     });
+
+    it('should handle list item with literal [ ] text that is not yet a task item', () => {
+      // Scenario: User has a bullet list and manually types "[ ]" into one item
+      // The editor hasn't converted it to a task item yet (multi-item list restriction)
+      // When saved, it should serialize correctly and not double the brackets
+      
+      const html = `<ul>
+        <li><p>[ ] list item</p></li>
+      </ul>`;
+      
+      const result = htmlToMarkdown(html, turndownService);
+      
+      expect(result.trim()).toBe('- [ ] list item');
+      
+      // Now round-trip it
+      const json = markdownToTiptap(result.trim());
+      expect(json.content[0].type).toBe('taskList');
+      expect(json.content[0].content[0].attrs.checked).toBe(false);
+    });
+
+    it('should handle multi-item list where one item has literal [ ] text', () => {
+      // User has multiple list items, manually types "[ ]" into one
+      // TaskListInputRule won't convert it (multi-item restriction)
+      // It stays as a regular list item with literal "[ ]" text
+      
+      const html = `<ul>
+        <li><p>first item</p></li>
+        <li><p>[ ] second item</p></li>
+        <li><p>third item</p></li>
+      </ul>`;
+      
+      const result = htmlToMarkdown(html, turndownService);
+      
+      const lines = result.trim().split('\n').filter(l => l.trim());
+      expect(lines[0]).toBe('- first item');
+      expect(lines[1]).toBe('- [ ] second item');
+      expect(lines[2]).toBe('- third item');
+    });
   });
 
   describe('Tables', () => {
