@@ -210,6 +210,10 @@ body {
 
 .ProseMirror ul[data-type="taskList"] input[type="checkbox"] {
   cursor: pointer;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--primary-color);
 }
 
 .ProseMirror mark {
