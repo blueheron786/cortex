@@ -3,10 +3,12 @@ const { initEditor } = require('./src/editor/init');
 const { createMarkdownSerializer } = require('./src/markdown/serializer');
 const { openFile, setupAutoSave } = require('./src/file/operations');
 const { renderFileTree } = require('./src/file/tree');
+const { SearchDialog } = require('./src/search/dialog');
 
 // State
 let editor = null;
 let workspacePath = null;
+let searchDialog = null;
 const turndownService = createMarkdownSerializer();
 
 // Workspace management
@@ -15,6 +17,11 @@ async function loadWorkspace(folderPath) {
   const items = await window.api.readDir(folderPath);
   const fileTree = document.querySelector('#file-tree');
   renderFileTree(items, fileTree, 0, (filePath) => openFile(filePath, editor));
+  
+  // Update search dialog with new file list
+  if (searchDialog) {
+    searchDialog.updateFiles(items, folderPath);
+  }
   
   // Save workspace path
   await window.api.writeSettings({ lastWorkspacePath: folderPath });
@@ -63,6 +70,20 @@ document.addEventListener('mouseup', () => {
 async function init() {
   editor = initEditor(() => {
     setupAutoSave(editor, turndownService)();
+  });
+  
+  // Initialize search dialog
+  searchDialog = new SearchDialog();
+  searchDialog.onSelect((filePath) => {
+    openFile(filePath, editor);
+  });
+  
+  // Setup CTRL+P keyboard shortcut
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+      e.preventDefault();
+      searchDialog.open();
+    }
   });
   
   // Load last workspace

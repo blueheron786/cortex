@@ -18,6 +18,19 @@
     <div id="editor-header">No file opened</div>
     <div id="editor"></div>
   </div>
+  
+  <!-- Quick Search Dialog -->
+  <div id="search-overlay" class="search-overlay hidden">
+    <div class="search-dialog">
+      <div class="search-input-container">
+        <input type="text" id="search-input" placeholder="Search files in vault..." autocomplete="off">
+      </div>
+      <div class="search-results" id="search-results">
+        <div class="search-empty">Start typing to search...</div>
+      </div>
+    </div>
+  </div>
+  
   <script src="dist/renderer.js"></script>
 </body>
 </html>

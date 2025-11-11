@@ -21,6 +21,7 @@
     "@tiptap/extension-task-item": "^2.10.3",
     "@tiptap/extension-task-list": "^2.10.3",
     "@tiptap/starter-kit": "^2.10.3",
+    "fuse.js": "^7.1.0",
     "marked": "^17.0.0",
     "turndown": "^7.2.2"
   },
