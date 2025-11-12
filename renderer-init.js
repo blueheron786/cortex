@@ -1,9 +1,9 @@
 // Module imports
-const { initEditor } = require('./src/editor/init');
-const { createMarkdownSerializer } = require('./src/markdown/serializer');
-const { openFile, setupAutoSave } = require('./src/file/operations');
-const { renderFileTree } = require('./src/file/tree');
-const { SearchDialog } = require('./src/search/dialog');
+import { initEditor } from './src/editor/init.js';
+import { createMarkdownSerializer } from './src/markdown/serializer.js';
+import { openFile, setupAutoSave } from './src/file/operations.js';
+import { renderFileTree } from './src/file/tree.js';
+import { SearchDialog } from './src/search/dialog.js';
 
 // State
 let editor = null;
@@ -35,6 +35,25 @@ async function loadWorkspace(folderPath) {
 
 // Initialize
 async function init() {
+  // Mobile menu toggle
+  const menuToggle = document.querySelector('#menu-toggle');
+  const sidebar = document.querySelector('#sidebar');
+  
+  if (menuToggle && window.api && window.api.isCapacitor === true) {
+    menuToggle.classList.remove('hidden');
+    
+    menuToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('mobile-hidden');
+    });
+    
+    // Close sidebar when a file is selected on mobile
+    sidebar.addEventListener('click', (e) => {
+      if (e.target.classList.contains('file-item')) {
+        sidebar.classList.add('mobile-hidden');
+      }
+    });
+  }
+  
   // Setup event listeners first
   const openFolderBtn = document.querySelector('#open-folder-btn');
   console.log('Open folder button found:', openFolderBtn);
@@ -91,7 +110,6 @@ async function init() {
   }
 
   // Sidebar resize functionality (desktop only)
-  const sidebar = document.querySelector('#sidebar');
   const resizeHandle = document.querySelector('#resize-handle');
   let isResizing = false;
 
@@ -143,14 +161,26 @@ async function init() {
   
   // Mobile-specific UI adjustments
   if (window.api && window.api.isCapacitor === true) {
-    // Show new file button, change open folder button text
+    // Change button labels for mobile
+    const openFolderBtn = document.querySelector('#open-folder-btn');
+    openFolderBtn.textContent = 'Choose Folder';
     document.querySelector('#new-file-btn').classList.remove('hidden');
-    document.querySelector('#open-folder-btn').textContent = 'Storage Info';
     
-    // Auto-load the vault folder
+    // Update sidebar header
+    const sidebarH3 = document.querySelector('#sidebar-header h3');
+    sidebarH3.textContent = 'Your Vault';
+    
+    // Try to load existing folder or prompt user to choose one
     const folderPath = await window.api.openFolder();
     if (folderPath) {
       await loadWorkspace(folderPath);
+      // Update header to show location
+      sidebarH3.innerHTML = 'Your Vault<br><small style="font-size: 10px; font-weight: normal; color: #808080;">' + 
+                            (folderPath.includes('content://') ? 'Custom folder' : folderPath) + '</small>';
+    } else {
+      // Show a message prompting to choose folder
+      const fileTree = document.querySelector('#file-tree');
+      fileTree.innerHTML = '<div class="empty-state">Tap <strong>Choose Folder</strong> to select where to store your notes</div>';
     }
     
     // If no files exist, create a welcome file

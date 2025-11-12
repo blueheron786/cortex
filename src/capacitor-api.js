@@ -50,30 +50,45 @@ async function readDirRecursive(dirPath, basePath = '') {
 }
 
 /**
- * Open folder picker (Android native)
- * Note: For now, we'll use a predefined 'vault' folder in Documents
- * A proper Android folder picker would require a custom Capacitor plugin
+ * Open folder picker (Android native using Storage Access Framework)
  */
 async function openFolder() {
-  // For simplicity, use Documents/cortex-vault as the workspace
-  const vaultPath = 'cortex-vault';
-  
   try {
-    // Try to create the vault folder if it doesn't exist
-    await Filesystem.mkdir({
-      path: vaultPath,
-      directory: Directory.Documents,
-      recursive: true
-    });
-    
-    return vaultPath;
-  } catch (err) {
-    if (err.message && err.message.includes('exists')) {
-      // Folder already exists, that's fine
-      return vaultPath;
+    // Check if we have a saved folder URI
+    const savedUri = localStorage.getItem('cortex_folder_uri');
+    if (savedUri) {
+      return savedUri;
     }
-    console.error('Error opening folder:', err);
+    
+    // Use the native folder picker plugin
+    const FolderPicker = window.Capacitor?.Plugins?.FolderPicker;
+    
+    if (FolderPicker) {
+      const result = await FolderPicker.pickFolder();
+      if (result && result.uri) {
+        // Save the URI for future use
+        localStorage.setItem('cortex_folder_uri', result.uri);
+        return result.uri;
+      }
+    }
+    
     return null;
+  } catch (err) {
+    console.error('Error opening folder:', err);
+    
+    // Fallback: try to create a default vault in Documents
+    try {
+      const vaultPath = 'cortex-vault';
+      await Filesystem.mkdir({
+        path: vaultPath,
+        directory: Directory.Documents,
+        recursive: true
+      });
+      return vaultPath;
+    } catch (fallbackErr) {
+      console.error('Fallback folder creation failed:', fallbackErr);
+      return null;
+    }
   }
 }
 

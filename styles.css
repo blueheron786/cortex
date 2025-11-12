@@ -158,6 +158,26 @@ body {
   border-bottom: 1px solid #3e3e42;
   font-size: 14px;
   color: #cccccc;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.menu-toggle {
+  background: var(--primary-color);
+  color: #1e1e1e;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1;
+  display: none;
+}
+
+.menu-toggle:hover {
+  background: var(--primary-color-hover);
 }
 
 #editor {
@@ -461,12 +481,12 @@ body {
     top: 0;
     bottom: 0;
     z-index: 100;
-    transform: translateX(-100%);
+    transform: translateX(0);
     transition: transform 0.3s ease;
   }
 
-  #sidebar.mobile-open {
-    transform: translateX(0);
+  #sidebar.mobile-hidden {
+    transform: translateX(-100%);
   }
 
   #resize-handle {
@@ -475,6 +495,10 @@ body {
 
   #editor-container {
     width: 100%;
+  }
+
+  .menu-toggle {
+    display: block;
   }
 
   #sidebar-header {
