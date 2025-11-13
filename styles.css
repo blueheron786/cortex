@@ -291,13 +291,13 @@ body {
 }
 
 .ProseMirror a {
-  color: var(--primary-color);
+  color: var(--primary-color) !important;
   text-decoration: underline;
   cursor: pointer;
 }
 
 .ProseMirror a:hover {
-  color: var(--primary-color-hover);
+  color: var(--primary-color-hover) !important;
 }
 
 /* Search Dialog Styles */
