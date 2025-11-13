@@ -11,6 +11,33 @@ function createMarkdownSerializer() {
 
   // Store service reference for nested content processing
   const serviceRef = turndownService;
+
+  // Internal links rule - must come before default link handling
+  turndownService.addRule('internalLinks', {
+    filter: function(node) {
+      return (
+        node.nodeName === 'A' &&
+        node.getAttribute('href') &&
+        node.getAttribute('href').startsWith('internal:')
+      );
+    },
+    replacement: function(content, node) {
+      const href = node.getAttribute('href');
+      const pageName = href.slice(9); // Remove 'internal:' prefix
+      
+      // Check if display text differs from page name
+      const displayText = content.trim();
+      const pageNameWithoutAnchor = pageName.split('#')[0];
+      
+      if (displayText !== pageNameWithoutAnchor && displayText !== pageName) {
+        // Custom display text: [[Page|Display]]
+        return `[[${pageName}|${displayText}]]`;
+      } else {
+        // Standard link: [[Page]]
+        return `[[${pageName}]]`;
+      }
+    }
+  });
   
   // Custom rules for turndown
   turndownService.addRule('taskList', {

@@ -9,7 +9,51 @@ function parseInlineFormatting(text) {
     let pos = 0;
     
     while (pos < str.length) {
-      // Check for markdown links [text](url)
+      // Check for internal links [[Page Name]] or [[Page|Display]]
+      if (str.substr(pos, 2) === '[[') {
+        const closeIndex = str.indexOf(']]', pos + 2);
+        if (closeIndex !== -1) {
+          if (pos > 0) {
+            segments.push({ type: 'text', text: str.slice(0, pos) });
+          }
+          
+          const linkContent = str.slice(pos + 2, closeIndex);
+          
+          // Check for custom display text (Page|Display)
+          let pageName, displayText;
+          const pipeIndex = linkContent.indexOf('|');
+          
+          if (pipeIndex !== -1) {
+            pageName = linkContent.slice(0, pipeIndex);
+            displayText = linkContent.slice(pipeIndex + 1);
+          } else {
+            pageName = linkContent;
+            // For anchors, show just the page name without the anchor
+            const anchorIndex = pageName.indexOf('#');
+            displayText = anchorIndex !== -1 ? pageName.slice(0, anchorIndex) : pageName;
+          }
+          
+          segments.push({
+            type: 'text',
+            text: displayText,
+            marks: [{
+              type: 'link',
+              attrs: {
+                href: 'internal:' + pageName,
+                class: 'internal-link'
+              }
+            }]
+          });
+          
+          const remaining = str.slice(closeIndex + 2);
+          if (remaining) {
+            segments.push(...applyFormatting(remaining, start + closeIndex + 2));
+          }
+          return segments;
+        }
+      }
+      
+      // Check for markdown links [text](url) - EXISTING CODE
       if (str[pos] === '[') {
         const closeBracket = str.indexOf(']', pos + 1);
         if (closeBracket !== -1 && str[closeBracket + 1] === '(') {

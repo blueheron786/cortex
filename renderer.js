@@ -1,96 +1,332 @@
-// Module imports
 const { initEditor } = require('./src/editor/init');
-const { createMarkdownSerializer } = require('./src/markdown/serializer');
 const { openFile, setupAutoSave } = require('./src/file/operations');
 const { renderFileTree } = require('./src/file/tree');
-const { SearchDialog } = require('./src/search/dialog');
+const { createMarkdownSerializer } = require('./src/markdown/serializer');
+const { buildLinkIndex } = require('./src/markdown/link-resolver');
+const { setupInternalLinkNavigation, addInternalLinkStyles } = require('./src/file/link-navigation');
 
-// State
-let editor = null;
-let workspacePath = null;
-let searchDialog = null;
+// Global state
+let fileTree = [];
+let linkIndex = null;
+let currentWorkspacePath = null;
+
+// Initialize TurndownService
 const turndownService = createMarkdownSerializer();
 
-// Workspace management
-async function loadWorkspace(folderPath) {
-  workspacePath = folderPath;
-  const items = await window.api.readDir(folderPath);
-  const fileTree = document.querySelector('#file-tree');
-  renderFileTree(items, fileTree, 0, (filePath) => openFile(filePath, editor));
-  
-  // Update search dialog with new file list
-  if (searchDialog) {
-    searchDialog.updateFiles(items, folderPath);
-  }
-  
-  // Save workspace path
-  await window.api.writeSettings({ lastWorkspacePath: folderPath });
-}
+// Create editor with auto-save
+const autoSaveCallback = setupAutoSave(null, turndownService);
+const editor = initEditor(autoSaveCallback);
 
-// Event listeners
-document.querySelector('#open-folder-btn').addEventListener('click', async () => {
+// Inject internal link styles
+addInternalLinkStyles();
+
+// UI Elements
+const openFolderBtn = document.querySelector('#open-folder-btn');
+const fileTreeContainer = document.querySelector('#file-tree');
+
+// Open folder handler
+openFolderBtn.addEventListener('click', async () => {
   const folderPath = await window.api.openFolder();
   if (folderPath) {
-    loadWorkspace(folderPath);
+    await loadWorkspace(folderPath);
   }
 });
 
-// Sidebar resize functionality
-const sidebar = document.querySelector('#sidebar');
-const resizeHandle = document.querySelector('#resize-handle');
-let isResizing = false;
-
-resizeHandle.addEventListener('mousedown', (e) => {
-  isResizing = true;
-  document.body.style.cursor = 'col-resize';
-  document.body.style.userSelect = 'none';
-});
-
-document.addEventListener('mousemove', (e) => {
-  if (!isResizing) return;
+// Load workspace and setup internal links
+async function loadWorkspace(folderPath) {
+  currentWorkspacePath = folderPath;
   
-  const newWidth = e.clientX;
-  const minWidth = 150;
-  const maxWidth = 600;
+  // Load file tree
+  fileTree = await window.api.readDir(folderPath);
   
-  if (newWidth >= minWidth && newWidth <= maxWidth) {
-    sidebar.style.width = newWidth + 'px';
-  }
-});
-
-document.addEventListener('mouseup', () => {
-  if (isResizing) {
-    isResizing = false;
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-  }
-});
-
-// Initialize
-async function init() {
-  editor = initEditor(() => {
-    setupAutoSave(editor, turndownService)();
-  });
+  // Build link index for fast internal link resolution
+  linkIndex = buildLinkIndex(fileTree);
   
-  // Initialize search dialog
-  searchDialog = new SearchDialog();
-  searchDialog.onSelect((filePath) => {
+  // Setup internal link navigation
+  setupInternalLinkNavigation(editor, fileTree, (filePath) => {
     openFile(filePath, editor);
   });
   
-  // Setup CTRL+P keyboard shortcut
-  document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
-      e.preventDefault();
-      searchDialog.open();
-    }
+  // Render file tree
+  renderFileTree(fileTree, fileTreeContainer, 0, (filePath) => {
+    openFile(filePath, editor);
   });
   
-  // Load last workspace
+  // Save workspace path to settings
+  await window.api.writeSettings({ lastWorkspacePath: folderPath });
+  
+  // Update UI
+  document.querySelector('#workspace-name').textContent = folderPath.split(/[\\/]/).pop();
+}
+
+// Load last workspace on startup
+async function loadLastWorkspace() {
   const settings = await window.api.readSettings();
   if (settings.lastWorkspacePath) {
-    loadWorkspace(settings.lastWorkspacePath);
+    try {
+      // Verify the path still exists
+      const exists = await window.api.readDir(settings.lastWorkspacePath);
+      if (exists && exists.length >= 0) {
+        await loadWorkspace(settings.lastWorkspacePath);
+      }
+    } catch (err) {
+      console.log('Last workspace no longer exists');
+    }
   }
 }
 
-init();
+// Initialize on load
+loadLastWorkspace();
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  // Cmd/Ctrl + O: Open folder
+  if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
+    e.preventDefault();
+    openFolderBtn.click();
+  }
+  
+  // Cmd/Ctrl + S: Manual save (auto-save is already enabled)
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault();
+    // Save is automatic, but we can show a notification
+    showNotification('Saved', 'success');
+  }
+  
+  // Cmd/Ctrl + K: Quick link insert (optional)
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    showLinkInsertDialog();
+  }
+});
+
+// Optional: Show link insert dialog with autocomplete
+function showLinkInsertDialog() {
+  if (!linkIndex || linkIndex.size === 0) {
+    showNotification('No workspace open', 'error');
+    return;
+  }
+  
+  // Create a simple dialog
+  const dialog = document.createElement('div');
+  dialog.className = 'link-dialog';
+  dialog.innerHTML = `
+    <div class="link-dialog-content">
+      <h3>Insert Internal Link</h3>
+      <input type="text" id="link-search" placeholder="Search for a page..." autocomplete="off">
+      <div id="link-suggestions"></div>
+      <div class="link-dialog-buttons">
+        <button id="link-cancel">Cancel</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(dialog);
+  
+  const input = dialog.querySelector('#link-search');
+  const suggestions = dialog.querySelector('#link-suggestions');
+  
+  // Focus input
+  input.focus();
+  
+  // Search and show suggestions
+  input.addEventListener('input', () => {
+    const query = input.value.toLowerCase();
+    suggestions.innerHTML = '';
+    
+    if (query.length === 0) {
+      return;
+    }
+    
+    // Search through link index
+    const matches = [];
+    linkIndex.forEach((filePath, pageName) => {
+      if (pageName.toLowerCase().includes(query) && !pageName.endsWith('.md')) {
+        matches.push({ pageName, filePath });
+      }
+    });
+    
+    // Show top 10 matches
+    matches.slice(0, 10).forEach(match => {
+      const item = document.createElement('div');
+      item.className = 'link-suggestion-item';
+      item.textContent = match.pageName;
+      item.title = match.filePath;
+      
+      item.addEventListener('click', () => {
+        insertInternalLink(match.pageName);
+        document.body.removeChild(dialog);
+      });
+      
+      suggestions.appendChild(item);
+    });
+  });
+  
+  // Handle Enter key
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const firstSuggestion = suggestions.querySelector('.link-suggestion-item');
+      if (firstSuggestion) {
+        firstSuggestion.click();
+      } else if (input.value.trim()) {
+        // Insert link even if not found (creates a broken link)
+        insertInternalLink(input.value.trim());
+        document.body.removeChild(dialog);
+      }
+    } else if (e.key === 'Escape') {
+      document.body.removeChild(dialog);
+    }
+  });
+  
+  // Cancel button
+  dialog.querySelector('#link-cancel').addEventListener('click', () => {
+    document.body.removeChild(dialog);
+  });
+  
+  // Click outside to close
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) {
+      document.body.removeChild(dialog);
+    }
+  });
+}
+
+// Insert internal link at cursor position
+function insertInternalLink(pageName) {
+  const { state } = editor;
+  const { from, to } = state.selection;
+  
+  editor
+    .chain()
+    .focus()
+    .insertContentAt({ from, to }, [
+      {
+        type: 'text',
+        text: pageName,
+        marks: [
+          {
+            type: 'link',
+            attrs: {
+              href: `internal:${pageName}`,
+              class: 'internal-link'
+            }
+          }
+        ]
+      },
+      { type: 'text', text: ' ' }
+    ])
+    .run();
+}
+
+// Simple notification system
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `notification notification-${type}`;
+  notification.textContent = message;
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 1000;
+    animation: slideIn 0.3s ease;
+    background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+    color: white;
+  `;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.animation = 'slideOut 0.3s ease';
+    setTimeout(() => notification.remove(), 300);
+  }, 2000);
+}
+
+// Add CSS for link dialog
+const style = document.createElement('style');
+style.textContent = `
+  .link-dialog {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+  }
+  
+  .link-dialog-content {
+    background: white;
+    padding: 24px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  }
+  
+  .link-dialog-content h3 {
+    margin-top: 0;
+    margin-bottom: 16px;
+  }
+  
+  #link-search {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  
+  #link-search:focus {
+    outline: none;
+    border-color: #7c3aed;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+  }
+  
+  #link-suggestions {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+  }
+  
+  .link-suggestion-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.15s;
+  }
+  
+  .link-suggestion-item:hover {
+    background: #f3f4f6;
+  }
+  
+  .link-dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  
+  .link-dialog-buttons button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  
+  #link-cancel {
+    background: #e5e7eb;
+    color: #374151;
+  }
+  
+  #link-cancel:hover {
+    background: #d1d5db;
+  }
+`;
+document.head.appendChild(style);

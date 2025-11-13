@@ -26,9 +26,21 @@ function initEditor(onUpdate) {
       TaskListInputRule,
       MarkdownPaste,
       Link.configure({
-        openOnClick: true,
+        openOnClick: false, // We handle clicks ourselves for internal links
         HTMLAttributes: {
           class: 'editor-link'
+        },
+        // Allow internal: protocol for internal links
+        validate: href => {
+          if (!href) return false;
+          // Allow internal links
+          if (href.startsWith('internal:')) return true;
+          // Allow standard URLs
+          return /^https?:\/\//.test(href) || /^mailto:/.test(href);
+        },
+        // Preserve internal: links in HTML output
+        renderHTML({ HTMLAttributes }) {
+          return ['a', HTMLAttributes, 0];
         }
       }),
       Table.configure({
