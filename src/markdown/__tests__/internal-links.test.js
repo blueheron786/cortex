@@ -1,6 +1,6 @@
-const { parseInlineFormatting, markdownToTiptap } = require('../src/markdown/parser');
-const { htmlToMarkdown, createMarkdownSerializer } = require('../src/markdown/serializer');
-const { buildLinkIndex, resolveInternalLink, getPageNameFromHref } = require('../src/markdown/link-resolver');
+const { parseInlineFormatting, markdownToTiptap } = require('../parser');
+const { htmlToMarkdown, createMarkdownSerializer } = require('../serializer');
+const { buildLinkIndex, resolveInternalLink, getPageNameFromHref } = require('../link-resolver');
 
 describe('Internal Links - Parser (Markdown to TipTap)', () => {
   test('should parse simple internal link [[Page1]]', () => {
