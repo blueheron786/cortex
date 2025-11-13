@@ -60,13 +60,14 @@ async function openFolder() {
       return savedUri;
     }
     
-    // Use the native folder picker plugin
-    const FolderPicker = window.Capacitor?.Plugins?.FolderPicker;
+    // Use our custom SAFStorage plugin
+    const SAFStorage = window.Capacitor?.Plugins?.SAFStorage;
     
-    if (FolderPicker) {
-      const result = await FolderPicker.pickFolder();
+    if (SAFStorage) {
+      const result = await SAFStorage.pickFolder();
       if (result && result.uri) {
-        // Save the URI for future use
+        // Save the URI exactly as returned - don't modify it
+        // The permissions are tied to the exact URI string
         localStorage.setItem('cortex_folder_uri', result.uri);
         return result.uri;
       }
@@ -96,6 +97,44 @@ async function openFolder() {
  * Read directory contents
  */
 async function readDir(dirPath) {
+  // Check if this is a SAF URI (content://)
+  if (dirPath && dirPath.startsWith('content://')) {
+    const SAFStorage = window.Capacitor?.Plugins?.SAFStorage;
+    if (SAFStorage) {
+      try {
+        const result = await SAFStorage.readDir({ uri: dirPath });
+        
+        // Convert to our format and handle subdirectories recursively
+        const items = [];
+        for (const file of result.files) {
+          const item = {
+            name: file.name,
+            path: file.uri,
+            isDirectory: file.isDirectory
+          };
+          
+          if (file.isDirectory) {
+            // Recursively read subdirectories
+            item.children = await readDir(file.uri);
+          }
+          
+          items.push(item);
+        }
+        
+        // Sort: directories first, then alphabetically
+        return items.sort((a, b) => {
+          if (a.isDirectory && !b.isDirectory) return -1;
+          if (!a.isDirectory && b.isDirectory) return 1;
+          return a.name.localeCompare(b.name);
+        });
+      } catch (err) {
+        console.error('Error reading SAF directory:', err);
+        return [];
+      }
+    }
+  }
+  
+  // Fall back to regular filesystem API for non-SAF paths
   return await readDirRecursive(dirPath);
 }
 
@@ -103,6 +142,21 @@ async function readDir(dirPath) {
  * Read file contents
  */
 async function readFile(filePath) {
+  // Check if this is a SAF URI (content://)
+  if (filePath && filePath.startsWith('content://')) {
+    const SAFStorage = window.Capacitor?.Plugins?.SAFStorage;
+    if (SAFStorage) {
+      try {
+        const result = await SAFStorage.readFile({ uri: filePath });
+        return result.content;
+      } catch (err) {
+        console.error('Error reading SAF file:', err);
+        return null;
+      }
+    }
+  }
+  
+  // Fall back to regular filesystem API
   try {
     const result = await Filesystem.readFile({
       path: filePath,
@@ -120,6 +174,32 @@ async function readFile(filePath) {
  * Write file contents
  */
 async function writeFile(filePath, content) {
+  // Check if this is a SAF URI - need to extract folder and filename
+  if (filePath && filePath.startsWith('content://')) {
+    const SAFStorage = window.Capacitor?.Plugins?.SAFStorage;
+    
+    // Get the folder URI from localStorage
+    const folderUri = localStorage.getItem('cortex_folder_uri');
+    
+    if (SAFStorage && folderUri) {
+      try {
+        // Extract filename from the path or URI
+        const fileName = filePath.split('/').pop();
+        
+        await SAFStorage.writeFile({
+          folderUri: folderUri,
+          fileName: fileName,
+          content: content
+        });
+        return true;
+      } catch (err) {
+        console.error('Error writing SAF file:', err);
+        return false;
+      }
+    }
+  }
+  
+  // Fall back to regular filesystem API
   try {
     await Filesystem.writeFile({
       path: filePath,
