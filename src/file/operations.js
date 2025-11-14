@@ -12,7 +12,7 @@ function getCurrentFile() {
   return currentFilePath;
 }
 
-async function openFile(filePath, editor) {
+async function openFile(filePath, editor, fileTree, setupInternalLinkNavigation) {
   if (!filePath.endsWith('.md')) return;
   
   const markdown = await window.api.readFile(filePath);
@@ -29,6 +29,15 @@ async function openFile(filePath, editor) {
     document.querySelectorAll('.file-item').forEach(item => {
       item.classList.toggle('active', item.dataset.path === filePath);
     });
+    // Re-attach internal link navigation after file load
+    if (window._internalLinkNavCleanup && typeof window._internalLinkNavCleanup === 'function') {
+      window._internalLinkNavCleanup();
+    }
+    if (setupInternalLinkNavigation && fileTree) {
+      window._internalLinkNavCleanup = setupInternalLinkNavigation(editor, fileTree, (targetFilePath) => {
+        openFile(targetFilePath, editor, fileTree, setupInternalLinkNavigation);
+      });
+    }
   }
 }
 

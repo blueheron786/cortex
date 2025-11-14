@@ -217,5 +217,53 @@ describe('Internal Links', () => {
       expect(index.get('Page2')).toBe('/root/nested/Page2.md');
       expect(index.get('Page3')).toBe('/root/nested/deep/Page3.md');
     });
+
+    test('should resolve Starhowlers to correct path in provided fileTree', () => {
+      const providedFileTree = [
+        {
+          name: '_fit',
+          path: 'D:\\Ashiq\\ObsidianVaults\\SecondBrain\\_fit',
+          isDirectory: true,
+          children: [
+            {
+              name: '1 - Projects',
+              path: 'D:\\Ashiq\\ObsidianVaults\\SecondBrain\\_fit\\1 - Projects',
+              isDirectory: true,
+              children: [
+                {
+                  name: 'Active',
+                  path: 'D:\\Ashiq\\ObsidianVaults\\SecondBrain\\_fit\\1 - Projects\\Active',
+                  isDirectory: true,
+                  children: [
+                    {
+                      name: 'Starborn Beasts v2',
+                      path: 'D:\\Ashiq\\ObsidianVaults\\SecondBrain\\_fit\\1 - Projects\\Active\\Starborn Beasts v2',
+                      isDirectory: true,
+                      children: [
+                        {
+                          name: 'Species Details',
+                          path: 'D:\\Ashiq\\ObsidianVaults\\SecondBrain\\_fit\\1 - Projects\\Active\\Starborn Beasts v2\\Species Details',
+                          isDirectory: true,
+                          children: [
+                            {
+                              name: 'Starhowlers.md',
+                              path: 'D:\\Ashiq\\ObsidianVaults\\SecondBrain\\_fit\\1 - Projects\\Active\\Starborn Beasts v2\\Species Details\\Starhowlers.md',
+                              isDirectory: false
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ];
+
+      const result = linkResolver.resolveInternalLink('Starhowlers', providedFileTree);
+      expect(result).toBe('D:\\Ashiq\\ObsidianVaults\\SecondBrain\\_fit\\1 - Projects\\Active\\Starborn Beasts v2\\Species Details\\Starhowlers.md');
+    });
   });
 });

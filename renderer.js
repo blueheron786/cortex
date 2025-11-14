@@ -41,15 +41,19 @@ async function loadWorkspace(folderPath) {
   
   // Build link index for fast internal link resolution
   linkIndex = buildLinkIndex(fileTree);
+  // Expose for runtime checks and to allow navigation handler to refresh index
+  window._fileTree = fileTree;
+  window._linkIndex = linkIndex;
+  window._currentWorkspacePath = folderPath;
   
   // Setup internal link navigation
   setupInternalLinkNavigation(editor, fileTree, (filePath) => {
-    openFile(filePath, editor);
+    openFile(filePath, editor, fileTree, setupInternalLinkNavigation);
   });
   
   // Render file tree
   renderFileTree(fileTree, fileTreeContainer, 0, (filePath) => {
-    openFile(filePath, editor);
+    openFile(filePath, editor, fileTree, setupInternalLinkNavigation);
   });
   
   // Save workspace path to settings
@@ -192,22 +196,25 @@ function showLinkInsertDialog() {
 }
 
 // Insert internal link at cursor position
-function insertInternalLink(pageName) {
+function insertInternalLink(pageName, displayText) {
   const { state } = editor;
   const { from, to } = state.selection;
-  
   editor
     .chain()
     .focus()
     .insertContentAt({ from, to }, [
       {
         type: 'text',
-        text: pageName,
+        text: displayText || pageName,
         marks: [
           {
             type: 'link',
             attrs: {
-              href: `internal:${pageName}`,
+              // Use a hash-based href so it survives DOM sanitizers but still looks like a link.
+              // Use a normal same-origin path so browsers keep the href attribute
+              href: `/__internal__/${pageName}`,
+              // Keep original target in data-href for resolution
+              dataHref: `internal:${pageName}`,
               class: 'internal-link'
             }
           }
@@ -330,3 +337,8 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
+// Attach internal link navigation handler only once after editor initialization
+setupInternalLinkNavigation(editor, fileTree, (filePath) => {
+  openFile(filePath, editor, fileTree, setupInternalLinkNavigation);
+});

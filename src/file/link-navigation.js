@@ -1,16 +1,35 @@
-const { resolveInternalLink, getPageNameFromHref } = require('../markdown/link-resolver');
+const { resolveInternalLink, getPageNameFromHref, buildLinkIndex } = require('../markdown/link-resolver');
 
 // Setup click handler for internal links
 function setupInternalLinkNavigation(editor, fileTree, onNavigate) {
+  console.log('setupInternalLinkNavigation fileTree:', fileTree);
+  console.log('Debugging fileTree structure:', JSON.stringify(fileTree, null, 2));
   const editorElement = editor.view.dom;
-  
+  // Remove any previous handler
+  if (editorElement._internalLinkHandler) {
+    editorElement.removeEventListener('click', editorElement._internalLinkHandler);
+  }
   // Store the current handler to allow cleanup if needed
-  const clickHandler = (e) => {
+  const clickHandler = async (e) => {
     // Check if clicked element is a link
     const link = e.target.closest('a');
     if (!link) return;
     
-    const href = link.getAttribute('href');
+    // Prefer href, but fall back to data-href (some renderers may strip non-HTTP hrefs)
+    let href = link.getAttribute('href');
+    if (!href || href === '') {
+      href = link.getAttribute('data-href') || href;
+    }
+    // Accept hash-based internal hrefs (#internal:Page) and normalize them to internal:Page
+    if (href && href.startsWith('#internal:')) {
+      href = href.slice(1); // remove the leading '#'
+    }
+    // Accept same-origin internal path format (/__internal__/Page)
+    if (href && href.startsWith('/__internal__/')) {
+      href = 'internal:' + href.slice('/__internal__/'.length);
+    }
+    // Debug log for all link clicks
+    console.log('Link clicked:', href);
     
     // Only handle internal links
     if (!href || !href.startsWith('internal:')) {
@@ -27,21 +46,47 @@ function setupInternalLinkNavigation(editor, fileTree, onNavigate) {
     e.preventDefault();
     
     const pageName = getPageNameFromHref(href);
-    
+    console.log('Internal link pageName:', pageName);
     if (!pageName) return;
-    
-    // Resolve the page name to a file path
-    const filePath = resolveInternalLink(pageName, fileTree);
-    
-    if (filePath) {
+
+    // Try to resolve using provided fileTree, or runtime cached index
+    let resolvedFilePath = resolveInternalLink(pageName, fileTree, window._linkIndex);
+    console.log('Initial resolveInternalLink result:', resolvedFilePath);
+
+    // If resolved but file no longer exists on disk, try refreshing the index from workspace
+    async function fileExists(path) {
+      try {
+        const content = await window.api.readFile(path);
+        return content !== null;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    if (resolvedFilePath) {
+      const exists = await fileExists(resolvedFilePath);
+      if (!exists && window._currentWorkspacePath) {
+        console.log('Resolved path missing on disk, rebuilding index from workspace...');
+        const freshTree = await window.api.readDir(window._currentWorkspacePath);
+        const freshIndex = buildLinkIndex(freshTree);
+        // update runtime cache
+        window._fileTree = freshTree;
+        window._linkIndex = freshIndex;
+        // retry resolution
+        resolvedFilePath = resolveInternalLink(pageName, freshTree, freshIndex);
+        console.log('Post-refresh resolveInternalLink result:', resolvedFilePath);
+      }
+    }
+
+    if (resolvedFilePath) {
+      console.log('Internal link resolved to:', resolvedFilePath);
       // Navigate to the file
-      onNavigate(filePath);
-      
+      onNavigate(resolvedFilePath);
+      console.log('onNavigate called for:', resolvedFilePath);
       // Handle anchor navigation if present
       const anchorMatch = href.match(/#(.+)$/);
       if (anchorMatch) {
         const headingText = anchorMatch[1];
-        // Small delay to let the file load first
         setTimeout(() => scrollToHeading(editor, headingText), 100);
       }
     } else {
@@ -50,12 +95,65 @@ function setupInternalLinkNavigation(editor, fileTree, onNavigate) {
       showLinkNotFoundNotification(pageName);
     }
   };
-  
   editorElement.addEventListener('click', clickHandler);
+  editorElement._internalLinkHandler = clickHandler;
+  
+  console.log('Event listener attached to:', editor.view.dom);
+  // Sync anchors in the editor DOM with underlying document marks.
+  // Some environments/renderers may clear the `href` attribute for non-standard schemes;
+  // ensure we still surface the internal target on the element as `data-href` so
+  // the click handler can resolve it reliably.
+  function findLinkMarkForText(text) {
+    let found = null;
+    editor.state.doc.descendants((node) => {
+      if (found) return false;
+      if (node.isText && node.text === text && node.marks && node.marks.length) {
+        for (const m of node.marks) {
+          if (m.type.name === 'link' && m.attrs && m.attrs.href) {
+            found = m.attrs.href;
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+    return found;
+  }
+
+  function syncAnchors() {
+    const anchors = editor.view.dom.querySelectorAll('a.internal-link');
+    anchors.forEach(a => {
+      const raw = a.getAttribute('href');
+      const data = a.getAttribute('data-href');
+      if ((raw === null || raw === '') && (!data || data === '')) {
+        const page = findLinkMarkForText(a.textContent || a.innerText || '');
+        if (page) {
+          a.setAttribute('data-href', page);
+          // Also set a safe same-origin href so the element is treated as a link visually
+          try {
+            a.setAttribute('href', `/__internal__/${page.replace(/^internal:/, '')}`);
+          } catch (err) {
+            // ignore if setting href fails for any reason
+          }
+        }
+      }
+    });
+  }
+
+  // Initial sync and observe for changes (debounced)
+  syncAnchors();
+  let moTimer = null;
+  const mo = new MutationObserver(() => {
+    if (moTimer) clearTimeout(moTimer);
+    moTimer = setTimeout(syncAnchors, 50);
+  });
+  mo.observe(editor.view.dom, { childList: true, subtree: true, characterData: true });
+  editorElement._internalLinkObserver = mo;
   
   // Return cleanup function
   return () => {
     editorElement.removeEventListener('click', clickHandler);
+    delete editorElement._internalLinkHandler;
   };
 }
 
@@ -136,29 +234,33 @@ function showLinkNotFoundNotification(pageName) {
 function addInternalLinkStyles() {
   const style = document.createElement('style');
   style.textContent = `
-    /* Internal links */
-    .ProseMirror a[href^="internal:"] {
+    /* Internal links (match either href or data-href) */
+    .ProseMirror a[href^="internal:"],
+    .ProseMirror a[data-href^="internal:"] {
       color: #7c3aed;
       text-decoration: none;
       cursor: pointer;
       border-bottom: 1px dashed #7c3aed;
       transition: all 0.15s;
     }
-    
-    .ProseMirror a[href^="internal:"]:hover {
+
+    .ProseMirror a[href^="internal:"],
+    .ProseMirror a[href^="#internal:"],
+    .ProseMirror a[href^="/__internal__/"] ,
+    .ProseMirror a[data-href^="internal:"]:hover {
       color: #6d28d9;
       border-bottom-style: solid;
       background-color: rgba(124, 58, 237, 0.05);
     }
-    
-    /* External links */
-    .ProseMirror a:not([href^="internal:"]) {
+
+    /* External links (those that are not internal via href or data-href) */
+    .ProseMirror a:not([href^="internal:"]):not([data-href^="internal:"]) {
       color: #2563eb;
       text-decoration: none;
       border-bottom: 1px solid #93c5fd;
     }
-    
-    .ProseMirror a:not([href^="internal:"]):hover {
+
+    .ProseMirror a:not([href^="internal:"]):not([data-href^="internal:"]):hover {
       color: #1d4ed8;
       background-color: rgba(37, 99, 235, 0.05);
     }

@@ -30,7 +30,26 @@ function initEditor(onUpdate) {
         HTMLAttributes: {
           class: 'editor-link'
         },
-        // Allow internal: protocol for internal links
+        addAttributes() {
+          return {
+            href: {
+              default: null,
+              parseHTML: element => element.getAttribute('href'),
+              renderHTML: attributes => ({ href: attributes.href })
+            },
+            // Support a data-href attribute so we can preserve internal targets
+            dataHref: {
+              default: null,
+              parseHTML: element => element.getAttribute('data-href'),
+              renderHTML: attributes => ({ 'data-href': attributes.dataHref })
+            },
+            class: {
+              default: 'editor-link',
+              parseHTML: element => element.getAttribute('class'),
+              renderHTML: attributes => ({ class: attributes.class })
+            }
+          };
+        },
         validate: href => {
           if (!href) return false;
           // Allow internal links
@@ -38,9 +57,13 @@ function initEditor(onUpdate) {
           // Allow standard URLs
           return /^https?:\/\//.test(href) || /^mailto:/.test(href);
         },
-        // Preserve internal: links in HTML output
         renderHTML({ HTMLAttributes }) {
-          return ['a', HTMLAttributes, 0];
+          // Always include href, data-href and class (if present)
+          const out = { ...HTMLAttributes };
+          if (HTMLAttributes.href !== undefined) out.href = HTMLAttributes.href;
+          if (HTMLAttributes['data-href'] !== undefined) out['data-href'] = HTMLAttributes['data-href'];
+          if (HTMLAttributes.class !== undefined) out.class = HTMLAttributes.class;
+          return ['a', out, 0];
         }
       }),
       Table.configure({

@@ -27,8 +27,42 @@ function resolveInternalLink(pageName, fileTree, linkIndex = null) {
   // Remove .md extension if present for consistency
   const normalizedName = pageName.replace(/\.md$/, '');
   
-  // Try to find the page
-  return index.get(normalizedName) || null;
+  console.log('resolveInternalLink called with:', pageName);
+  
+  // Try to find the page by simple name
+  const direct = index.get(normalizedName);
+  if (direct) return direct;
+
+  // If the pageName contains path separators, try to resolve by matching the
+  // relative path inside the provided fileTree. This handles links like
+  // "_fit/path/to/file" which include directories.
+  if (fileTree && (pageName.includes('/') || pageName.includes('\\'))) {
+    const target = normalizedName.replace(/\\\\/g, '/');
+
+    let found = null;
+    function search(items) {
+      for (const item of items) {
+        if (item.isDirectory && item.children) {
+          search(item.children);
+          if (found) return;
+        } else if (item.name && item.path) {
+          // Normalize path separators to forward slashes for matching
+          const rel = item.path.replace(/\\\\/g, '/');
+          // Check if the end of the path matches the requested target (with or without .md)
+          if (rel.endsWith(`/${target}.md`) || rel.endsWith(`/${target}`) || rel.toLowerCase().endsWith(`/${target}.md`)) {
+            found = item.path;
+            return;
+          }
+        }
+      }
+    }
+
+    search(fileTree);
+    if (found) return found;
+  }
+
+  // Not found
+  return null;
 }
 
 // Extract page name from internal: href
