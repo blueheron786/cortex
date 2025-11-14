@@ -1,3 +1,7 @@
+/**
+ * @jest-environment jsdom
+ */
+
 const { parseInlineFormatting, markdownToTiptap } = require('../parser');
 
 describe('parseInlineFormatting', () => {
@@ -250,9 +254,11 @@ describe('parseInlineFormatting', () => {
 
     it('should handle nested formatting', () => {
       const result = parseInlineFormatting('**bold with *italic* inside**');
-      // First processes **, treating everything inside as bold
+      // Should split into segments for bold and bold+italic
       expect(result).toEqual([
-        { type: 'text', text: 'bold with *italic* inside', marks: [{ type: 'bold' }] }
+        { type: 'text', text: 'bold with ', marks: [{ type: 'bold' }] },
+        { type: 'text', text: 'italic', marks: [{ type: 'italic' }, { type: 'bold' }] },
+        { type: 'text', text: ' inside', marks: [{ type: 'bold' }] }
       ]);
     });
   });

@@ -9,35 +9,36 @@ function createMarkdownSerializer() {
     strongDelimiter: '**'
   });
 
-  // Store service reference for nested content processing
-  const serviceRef = turndownService;
-
-  // Internal links rule - must come before default link handling
-  turndownService.addRule('internalLinks', {
-    filter: function(node) {
+  // Internal link rule: serialize <a class="internal-link"> as [[Page1]] (register first)
+  turndownService.addRule('internalLink', {
+    filter: function (node) {
       return (
         node.nodeName === 'A' &&
+        node.getAttribute('class') &&
+        node.getAttribute('class').split(' ').includes('internal-link') &&
         node.getAttribute('href') &&
         node.getAttribute('href').startsWith('internal:')
       );
     },
-    replacement: function(content, node) {
+    replacement: function (content, node) {
       const href = node.getAttribute('href');
-      const pageName = href.slice(9); // Remove 'internal:' prefix
-      
-      // Check if display text differs from page name
-      const displayText = content.trim();
-      const pageNameWithoutAnchor = pageName.split('#')[0];
-      
-      if (displayText !== pageNameWithoutAnchor && displayText !== pageName) {
-        // Custom display text: [[Page|Display]]
-        return `[[${pageName}|${displayText}]]`;
-      } else {
-        // Standard link: [[Page]]
-        return `[[${pageName}]]`;
+      let pageName = href.slice(9);
+      const anchorIndex = pageName.indexOf('#');
+      let anchor = '';
+      if (anchorIndex !== -1) {
+        anchor = pageName.slice(anchorIndex);
+        pageName = pageName.slice(0, anchorIndex);
       }
+      // If display text matches pageName or pageName+anchor, omit custom text
+      if (content === pageName || content === pageName + anchor) {
+        return `[[${pageName + anchor}]]`;
+      }
+      return `[[${pageName + anchor}|${content}]]`;
     }
   });
+
+  // Store service reference for nested content processing
+  const serviceRef = turndownService;
   
   // Custom rules for turndown
   turndownService.addRule('taskList', {
@@ -45,6 +46,34 @@ function createMarkdownSerializer() {
       return node.nodeName === 'LI' && node.hasAttribute('data-type') && node.getAttribute('data-type') === 'taskItem';
     },
     replacement: (content, node) => {
+    // Internal link rule: serialize <a class="internal-link"> as [[Page1]]
+    turndownService.addRule('internalLink', {
+      filter: function (node) {
+        return (
+          node.nodeName === 'A' &&
+          node.getAttribute('class') === 'internal-link' &&
+          node.getAttribute('href') &&
+          node.getAttribute('href').startsWith('internal:')
+        );
+      },
+      replacement: function (content, node) {
+        const href = node.getAttribute('href');
+        // Remove 'internal:' prefix
+        let pageName = href.slice(9);
+        // Handle anchor
+        const anchorIndex = pageName.indexOf('#');
+        let anchor = '';
+        if (anchorIndex !== -1) {
+          anchor = pageName.slice(anchorIndex);
+          pageName = pageName.slice(0, anchorIndex);
+        }
+        // If display text differs from pageName, use [[Page1|Custom Text]]
+        if (content !== pageName + anchor) {
+          return `[[${pageName + anchor}|${content}]]`;
+        }
+        return `[[${pageName + anchor}]]`;
+      }
+    });
       const checkbox = node.querySelector('input[type="checkbox"]');
       const checked = checkbox && checkbox.checked ? 'x' : ' ';
       

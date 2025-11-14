@@ -105,10 +105,11 @@ function parseInlineFormatting(text) {
           if (pos > 0) {
             segments.push({ type: 'text', text: str.slice(0, pos) });
           }
-          segments.push({
-            type: 'text',
-            text: str.slice(pos + 3, end),
-            marks: [{ type: 'bold' }, { type: 'italic' }]
+          // Recursively parse inner text and add bold+italic marks
+          const innerSegments = applyFormatting(str.slice(pos + 3, end), start + pos + 3);
+          innerSegments.forEach(seg => {
+            seg.marks = (seg.marks || []).concat([{ type: 'bold' }, { type: 'italic' }]);
+            segments.push(seg);
           });
           const remaining = str.slice(end + 3);
           if (remaining) {
@@ -125,10 +126,11 @@ function parseInlineFormatting(text) {
           if (pos > 0) {
             segments.push({ type: 'text', text: str.slice(0, pos) });
           }
-          segments.push({
-            type: 'text',
-            text: str.slice(pos + 2, end),
-            marks: [{ type: 'bold' }]
+          // Recursively parse inner text and add bold mark
+          const innerSegments = applyFormatting(str.slice(pos + 2, end), start + pos + 2);
+          innerSegments.forEach(seg => {
+            seg.marks = (seg.marks || []).concat([{ type: 'bold' }]);
+            segments.push(seg);
           });
           const remaining = str.slice(end + 2);
           if (remaining) {
@@ -145,10 +147,11 @@ function parseInlineFormatting(text) {
           if (pos > 0) {
             segments.push({ type: 'text', text: str.slice(0, pos) });
           }
-          segments.push({
-            type: 'text',
-            text: str.slice(pos + 1, end),
-            marks: [{ type: 'italic' }]
+          // Recursively parse inner text and add italic mark
+          const innerSegments = applyFormatting(str.slice(pos + 1, end), start + pos + 1);
+          innerSegments.forEach(seg => {
+            seg.marks = (seg.marks || []).concat([{ type: 'italic' }]);
+            segments.push(seg);
           });
           const remaining = str.slice(end + 1);
           if (remaining) {
@@ -165,10 +168,11 @@ function parseInlineFormatting(text) {
           if (pos > 0) {
             segments.push({ type: 'text', text: str.slice(0, pos) });
           }
-          segments.push({
-            type: 'text',
-            text: str.slice(pos + 2, end),
-            marks: [{ type: 'highlight' }]
+          // Recursively parse inner text and add highlight mark
+          const innerSegments = applyFormatting(str.slice(pos + 2, end), start + pos + 2);
+          innerSegments.forEach(seg => {
+            seg.marks = (seg.marks || []).concat([{ type: 'highlight' }]);
+            segments.push(seg);
           });
           const remaining = str.slice(end + 2);
           if (remaining) {
@@ -185,10 +189,11 @@ function parseInlineFormatting(text) {
           if (pos > 0) {
             segments.push({ type: 'text', text: str.slice(0, pos) });
           }
-          segments.push({
-            type: 'text',
-            text: str.slice(pos + 2, end),
-            marks: [{ type: 'strike' }]
+          // Recursively parse inner text and add strike mark
+          const innerSegments = applyFormatting(str.slice(pos + 2, end), start + pos + 2);
+          innerSegments.forEach(seg => {
+            seg.marks = (seg.marks || []).concat([{ type: 'strike' }]);
+            segments.push(seg);
           });
           const remaining = str.slice(end + 2);
           if (remaining) {

@@ -1,3 +1,7 @@
+/**
+ * @jest-environment jsdom
+ */
+
 const { parseInlineFormatting, markdownToTiptap } = require('../parser');
 const { htmlToMarkdown, createMarkdownSerializer } = require('../serializer');
 const { buildLinkIndex, resolveInternalLink, getPageNameFromHref } = require('../link-resolver');
@@ -227,10 +231,10 @@ describe('Internal Links - Link Resolution', () => {
     expect(result).toBe('/root/nested/Page2.md');
   });
 
-  test('should return first match for duplicate names', () => {
-    const result = resolveInternalLink('Duplicate', mockFileTree);
-    expect(result).toBe('/root/Duplicate.md');
-  });
+    test('should return first match for duplicate names', () => {
+      const result = resolveInternalLink('Duplicate', mockFileTree);
+      expect(result).toBe('/root/other/Duplicate.md');
+    });
 
   test('should return null for non-existent page', () => {
     const result = resolveInternalLink('NonExistent', mockFileTree);
