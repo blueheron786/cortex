@@ -1,5 +1,27 @@
 const { initEditor } = require('./src/editor/init');
-const { openFile, setupAutoSave } = require('./src/file/operations');
+const { openFile, setupAutoSave, getCurrentFile, setCurrentFile } = require('./src/file/operations');
+
+// Small path helpers to avoid bundling Node's `path` in renderer (esbuild --platform=browser)
+function basename(p) {
+  if (!p) return '';
+  return p.split(/[\\\/]/).pop();
+}
+
+function dirname(p) {
+  if (!p) return '';
+  const parts = p.split(/[\\\/]/);
+  if (parts.length <= 1) return p;
+  parts.pop();
+  const sep = p.includes('\\') ? '\\' : '/';
+  return parts.join(sep);
+}
+
+function joinPaths(a, b) {
+  if (!a) return b;
+  const sep = a.includes('\\') ? '\\' : '/';
+  if (a.endsWith('\\') || a.endsWith('/')) return a + b;
+  return a + sep + b;
+}
 const { renderFileTree } = require('./src/file/tree');
 const { createMarkdownSerializer } = require('./src/markdown/serializer');
 const { buildLinkIndex } = require('./src/markdown/link-resolver');
@@ -66,9 +88,9 @@ async function loadWorkspace(folderPath) {
   }
   
   // Render file tree
-  renderFileTree(fileTree, fileTreeContainer, 0, (filePath) => {
-    openFile(filePath, editor, fileTree, setupInternalLinkNavigation);
-  });
+  // Keep last onFileClick globally so tree helpers can open files after creating them
+  window._lastOnFileClick = (filePath) => openFile(filePath, editor, fileTree, setupInternalLinkNavigation);
+  renderFileTree(fileTree, fileTreeContainer, 0, window._lastOnFileClick);
   
   // Save workspace path to settings
   await window.api.writeSettings({ lastWorkspacePath: folderPath });
@@ -76,6 +98,13 @@ async function loadWorkspace(folderPath) {
   // Update UI
   document.querySelector('#workspace-name').textContent = folderPath.split(/[\\/]/).pop();
 }
+
+// Expose a reload helper so other modules can refresh the workspace
+window.reloadWorkspace = async () => {
+  if (window._currentWorkspacePath) {
+    await loadWorkspace(window._currentWorkspacePath);
+  }
+};
 
 // Load last workspace on startup
 async function loadLastWorkspace() {
@@ -366,3 +395,70 @@ document.head.appendChild(style);
 setupInternalLinkNavigation(editor, fileTree, (filePath) => {
   openFile(filePath, editor, fileTree, setupInternalLinkNavigation);
 });
+
+// Allow clicking the editor header to rename the current file
+const editorHeader = document.querySelector('#editor-header');
+if (editorHeader) {
+  editorHeader.addEventListener('click', (e) => {
+    const current = getCurrentFile();
+    if (!current) return;
+
+    const oldBase = basename(current);
+    const dir = dirname(current);
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = oldBase.replace(/\.md$/, '');
+    input.style.minWidth = '200px';
+    // Replace header content with input
+    editorHeader.innerHTML = '';
+    editorHeader.appendChild(input);
+    input.select();
+    input.focus();
+
+    let finished = false;
+    const restore = () => {
+      editorHeader.textContent = oldBase;
+    };
+
+    const finish = async (save) => {
+      if (finished) return;
+      finished = true;
+      const newNameRaw = input.value.trim();
+      if (!save || !newNameRaw) {
+        restore();
+        return;
+      }
+
+      let newName = newNameRaw;
+      if (!newName.toLowerCase().endsWith('.md')) newName += '.md';
+
+      const newPath = joinPaths(dir, newName);
+      const success = await window.api.renameFile(current, newPath);
+      if (success) {
+        setCurrentFile(newPath);
+        await window.reloadWorkspace();
+        if (typeof window._lastOnFileClick === 'function') {
+          window._lastOnFileClick(newPath);
+        }
+        showNotification('Renamed', 'success');
+      } else {
+        showNotification('Rename failed', 'error');
+        restore();
+      }
+    };
+
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        finish(true);
+      } else if (ev.key === 'Escape') {
+        finish(false);
+      }
+    });
+
+    input.addEventListener('blur', () => finish(true));
+  });
+}
+
+// Expose notification helper to other modules (tree.js uses it)
+window.showNotification = showNotification;

@@ -97,6 +97,16 @@ ipcMain.handle('write-file', async (_, filePath, content) => {
   }
 });
 
+// Rename (move) a file
+ipcMain.handle('rename-file', async (_, oldPath, newPath) => {
+  try {
+    await fs.rename(oldPath, newPath);
+    return true;
+  } catch (err) {
+    return false;
+  }
+});
+
 ipcMain.handle('read-settings', async () => {
   const settingsPath = path.join(app.getPath('userData'), 'settings.json');
   try {
