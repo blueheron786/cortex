@@ -41,7 +41,7 @@ describe('Internal link parsing', () => {
 });
 
 describe('Internal link navigation', () => {
-  it('renders an internal link and triggers navigation on click', () => {
+  it('renders an internal link and triggers navigation on click', async () => {
     const input = '[[Starhowlers|Doggos]]';
     const json = markdownToTiptap(input);
     console.log('PARSED OUTPUT:', JSON.stringify(json, null, 2));
@@ -106,6 +106,9 @@ describe('Internal link navigation', () => {
     // Simulate a click event
     const clickEvent = new dom.window.MouseEvent('click', { bubbles: true, cancelable: true });
     link.dispatchEvent(clickEvent);
+
+    // Wait for async click handler to complete
+    await new Promise(resolve => setTimeout(resolve, 10));
 
     // Verify navigation was triggered
     expect(navigateMock).toHaveBeenCalledWith('/path/to/Starhowlers.md');

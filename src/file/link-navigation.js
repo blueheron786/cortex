@@ -9,6 +9,13 @@ function setupInternalLinkNavigation(editor, fileTree, onNavigate) {
   if (editorElement._internalLinkHandler) {
     editorElement.removeEventListener('click', editorElement._internalLinkHandler);
   }
+  // Remove any previous observer
+  if (editorElement._internalLinkObserver) {
+    try {
+      editorElement._internalLinkObserver.disconnect();
+    } catch (err) {}
+    delete editorElement._internalLinkObserver;
+  }
   // Store the current handler to allow cleanup if needed
   const clickHandler = async (e) => {
     // Check if clicked element is a link
@@ -143,12 +150,30 @@ function setupInternalLinkNavigation(editor, fileTree, onNavigate) {
   // Initial sync and observe for changes (debounced)
   syncAnchors();
   let moTimer = null;
-  const mo = new MutationObserver(() => {
-    if (moTimer) clearTimeout(moTimer);
-    moTimer = setTimeout(syncAnchors, 50);
-  });
-  mo.observe(editor.view.dom, { childList: true, subtree: true, characterData: true });
-  editorElement._internalLinkObserver = mo;
+  // Create MutationObserver from the same window as the editor DOM when possible
+  let MutationObserverCtor = null;
+  try {
+    if (editor.view && editor.view.dom && editor.view.dom.ownerDocument && editor.view.dom.ownerDocument.defaultView && editor.view.dom.ownerDocument.defaultView.MutationObserver) {
+      MutationObserverCtor = editor.view.dom.ownerDocument.defaultView.MutationObserver;
+    } else if (typeof MutationObserver !== 'undefined') {
+      MutationObserverCtor = MutationObserver;
+    }
+  } catch (err) {
+    MutationObserverCtor = (typeof MutationObserver !== 'undefined') ? MutationObserver : null;
+  }
+
+  if (MutationObserverCtor) {
+    const mo = new MutationObserverCtor(() => {
+      if (moTimer) clearTimeout(moTimer);
+      moTimer = setTimeout(syncAnchors, 50);
+    });
+    try {
+      mo.observe(editor.view.dom, { childList: true, subtree: true, characterData: true });
+      editorElement._internalLinkObserver = mo;
+    } catch (err) {
+      // Some environments may not support observing the node; ignore silently
+    }
+  }
   
   // Return cleanup function
   return () => {
