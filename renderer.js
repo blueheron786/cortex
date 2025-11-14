@@ -4,6 +4,7 @@ const { renderFileTree } = require('./src/file/tree');
 const { createMarkdownSerializer } = require('./src/markdown/serializer');
 const { buildLinkIndex } = require('./src/markdown/link-resolver');
 const { setupInternalLinkNavigation, addInternalLinkStyles } = require('./src/file/link-navigation');
+const { SearchDialog } = require('./src/search/dialog');
 
 // Global state
 let fileTree = [];
@@ -19,6 +20,9 @@ const editor = initEditor(autoSaveCallback);
 
 // Inject internal link styles
 addInternalLinkStyles();
+
+// Quick search dialog
+const searchDialog = new SearchDialog();
 
 // UI Elements
 const openFolderBtn = document.querySelector('#open-folder-btn');
@@ -50,6 +54,16 @@ async function loadWorkspace(folderPath) {
   setupInternalLinkNavigation(editor, fileTree, (filePath) => {
     openFile(filePath, editor, fileTree, setupInternalLinkNavigation);
   });
+
+  // Update quick-search dialog with file list
+  try {
+    searchDialog.updateFiles(fileTree, folderPath);
+    searchDialog.onSelect((filePath) => {
+      openFile(filePath, editor, fileTree, setupInternalLinkNavigation);
+    });
+  } catch (err) {
+    // If the dialog elements aren't present yet, ignore
+  }
   
   // Render file tree
   renderFileTree(fileTree, fileTreeContainer, 0, (filePath) => {
@@ -101,6 +115,16 @@ document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
     e.preventDefault();
     showLinkInsertDialog();
+  }
+
+  // Cmd/Ctrl + P: Quick search
+  if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+    e.preventDefault();
+    try {
+      searchDialog.open();
+    } catch (err) {
+      // ignore if dialog isn't available
+    }
   }
 });
 
