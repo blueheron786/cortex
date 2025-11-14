@@ -1,4 +1,13 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+// IPC handler for opening external links
+ipcMain.handle('open-external', async (_, url) => {
+  try {
+    await shell.openExternal(url);
+    return true;
+  } catch (err) {
+    return false;
+  }
+});
 const path = require('path');
 const fs = require('fs').promises;
 

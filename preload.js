@@ -6,5 +6,6 @@ contextBridge.exposeInMainWorld('api', {
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
   writeFile: (filePath, content) => ipcRenderer.invoke('write-file', filePath, content),
   readSettings: () => ipcRenderer.invoke('read-settings'),
-  writeSettings: (settings) => ipcRenderer.invoke('write-settings', settings)
+  writeSettings: (settings) => ipcRenderer.invoke('write-settings', settings),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url)
 });

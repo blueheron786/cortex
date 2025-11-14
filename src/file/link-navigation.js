@@ -17,7 +17,9 @@ function setupInternalLinkNavigation(editor, fileTree, onNavigate) {
       // Let external links open normally
       if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
         e.preventDefault();
-        require('electron').shell.openExternal(href);
+        if (window.api && typeof window.api.openExternal === 'function') {
+          window.api.openExternal(href);
+        }
       }
       return;
     }
