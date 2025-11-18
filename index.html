@@ -15,7 +15,16 @@
   </div>
   <div id="resize-handle"></div>
   <div id="editor-container">
-    <div id="editor-header">No file opened</div>
+    <div id="editor-header">
+      <div id="header-left">
+        <span class="header-label">Workspace</span>
+        <span id="workspace-name">No workspace</span>
+      </div>
+      <div id="header-right">
+        <label for="editor-filename-input" class="header-label">File</label>
+        <input id="editor-filename-input" type="text" placeholder="No file opened" autocomplete="off" disabled aria-label="Current file name">
+      </div>
+    </div>
     <div id="editor"></div>
   </div>
   

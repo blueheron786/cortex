@@ -49,6 +49,112 @@ const searchDialog = new SearchDialog();
 // UI Elements
 const openFolderBtn = document.querySelector('#open-folder-btn');
 const fileTreeContainer = document.querySelector('#file-tree');
+const workspaceNameEl = document.querySelector('#workspace-name');
+const filenameInput = document.querySelector('#editor-filename-input');
+
+let filenameInputOriginalValue = '';
+let filenameCommitInFlight = false;
+
+function updateWorkspaceName(folderPath) {
+  if (!workspaceNameEl) return;
+  workspaceNameEl.textContent = folderPath ? basename(folderPath) : 'No workspace';
+}
+
+function resetFilenameInput() {
+  if (!filenameInput) return;
+  filenameInput.value = '';
+  filenameInput.placeholder = 'No file opened';
+  filenameInput.disabled = true;
+  filenameInputOriginalValue = '';
+}
+
+function setFilenameInputFromPath(filePath) {
+  if (!filenameInput) return;
+  if (!filePath) {
+    resetFilenameInput();
+    return;
+  }
+  const base = basename(filePath);
+  const display = base.endsWith('.md') ? base.slice(0, -3) : base;
+  filenameInput.disabled = false;
+  filenameInput.value = display;
+  filenameInputOriginalValue = display;
+  filenameInput.dataset.path = filePath;
+}
+
+function focusFilenameField(options = {}) {
+  if (!filenameInput || filenameInput.disabled) return;
+  filenameInput.focus();
+  if (options.select !== false) {
+    filenameInput.select();
+  }
+}
+
+async function commitFilenameInput(save) {
+  if (!filenameInput || filenameInput.disabled || filenameCommitInFlight) return;
+  const current = getCurrentFile();
+  if (!current) {
+    resetFilenameInput();
+    return;
+  }
+  if (!save) {
+    filenameInput.value = filenameInputOriginalValue;
+    return;
+  }
+
+  const newNameRaw = filenameInput.value.trim();
+  if (!newNameRaw) {
+    filenameInput.value = filenameInputOriginalValue;
+    return;
+  }
+  if (newNameRaw === filenameInputOriginalValue) {
+    return;
+  }
+
+  let newName = newNameRaw;
+  if (!newName.toLowerCase().endsWith('.md')) newName += '.md';
+  const newPath = joinPaths(dirname(current), newName);
+  if (newPath === current) return;
+
+  filenameCommitInFlight = true;
+  const success = await window.api.renameFile(current, newPath);
+  filenameCommitInFlight = false;
+  if (success) {
+    setCurrentFile(newPath);
+    if (window.reloadWorkspace) {
+      await window.reloadWorkspace();
+    }
+    if (typeof window._lastOnFileClick === 'function') {
+      await window._lastOnFileClick(newPath);
+    }
+    showNotification('Renamed', 'success');
+  } else {
+    filenameInput.value = filenameInputOriginalValue;
+    showNotification('Rename failed', 'error');
+  }
+}
+
+if (filenameInput) {
+  filenameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitFilenameInput(true);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      filenameInput.value = filenameInputOriginalValue;
+      filenameInput.blur();
+    }
+  });
+
+  filenameInput.addEventListener('blur', () => {
+    commitFilenameInput(true);
+  });
+}
+
+resetFilenameInput();
+updateWorkspaceName(null);
+window.focusFilenameInput = focusFilenameField;
+window.syncFilenameInput = setFilenameInputFromPath;
 
 // Open folder handler
 openFolderBtn.addEventListener('click', async () => {
@@ -65,6 +171,8 @@ async function loadWorkspace(folderPath) {
 
   if (isDifferentWorkspace) {
     window._expandedDirectories = new Set();
+    setCurrentFile(null);
+    resetFilenameInput();
   }
   
   // Load file tree
@@ -101,7 +209,7 @@ async function loadWorkspace(folderPath) {
   await window.api.writeSettings({ lastWorkspacePath: folderPath });
   
   // Update UI
-  document.querySelector('#workspace-name').textContent = folderPath.split(/[\\/]/).pop();
+  updateWorkspaceName(folderPath);
 }
 
 // Expose a reload helper so other modules can refresh the workspace
@@ -400,70 +508,6 @@ document.head.appendChild(style);
 setupInternalLinkNavigation(editor, fileTree, (filePath) => {
   openFile(filePath, editor, fileTree, setupInternalLinkNavigation);
 });
-
-// Allow clicking the editor header to rename the current file
-const editorHeader = document.querySelector('#editor-header');
-if (editorHeader) {
-  editorHeader.addEventListener('click', (e) => {
-    const current = getCurrentFile();
-    if (!current) return;
-
-    const oldBase = basename(current);
-    const dir = dirname(current);
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = oldBase.replace(/\.md$/, '');
-    input.style.minWidth = '200px';
-    // Replace header content with input
-    editorHeader.innerHTML = '';
-    editorHeader.appendChild(input);
-    input.select();
-    input.focus();
-
-    let finished = false;
-    const restore = () => {
-      editorHeader.textContent = oldBase;
-    };
-
-    const finish = async (save) => {
-      if (finished) return;
-      finished = true;
-      const newNameRaw = input.value.trim();
-      if (!save || !newNameRaw) {
-        restore();
-        return;
-      }
-
-      let newName = newNameRaw;
-      if (!newName.toLowerCase().endsWith('.md')) newName += '.md';
-
-      const newPath = joinPaths(dir, newName);
-      const success = await window.api.renameFile(current, newPath);
-      if (success) {
-        setCurrentFile(newPath);
-        await window.reloadWorkspace();
-        if (typeof window._lastOnFileClick === 'function') {
-          window._lastOnFileClick(newPath);
-        }
-        showNotification('Renamed', 'success');
-      } else {
-        showNotification('Rename failed', 'error');
-        restore();
-      }
-    };
-
-    input.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter') {
-        finish(true);
-      } else if (ev.key === 'Escape') {
-        finish(false);
-      }
-    });
-
-    input.addEventListener('blur', () => finish(true));
-  });
-}
 
 // Expose notification helper to other modules (tree.js uses it)
 window.showNotification = showNotification;

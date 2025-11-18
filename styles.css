@@ -135,6 +135,63 @@ body {
   border-bottom: 1px solid #3e3e42;
   font-size: 14px;
   color: #cccccc;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+#header-left,
+#header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#header-left {
+  flex: 1;
+  min-width: 0;
+}
+
+#header-right {
+  min-width: 240px;
+  justify-content: flex-end;
+}
+
+.header-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8a8a8a;
+}
+
+#workspace-name {
+  font-weight: 600;
+  color: #f3f3f3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#editor-filename-input {
+  background: #1e1e1e;
+  border: 1px solid #3e3e42;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: #f3f3f3;
+  min-width: 220px;
+  max-width: 320px;
+}
+
+#editor-filename-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(255, 153, 158, 0.2);
+}
+
+#editor-filename-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 #editor {

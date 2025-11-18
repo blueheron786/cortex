@@ -166,7 +166,7 @@ function renderFileTree(items, container, level = 0, onFileClick, parentPath = '
   }
 }
 
-function showContextMenu(dirPath, x, y, onClose) {
+function showContextMenu(dirPath, x, y) {
   // remove existing
   const existing = document.querySelector('.custom-context-menu');
   if (existing) existing.remove();
@@ -192,10 +192,16 @@ function showContextMenu(dirPath, x, y, onClose) {
   newFile.style.fontSize = '13px';
   newFile.addEventListener('mouseenter', () => newFile.style.background = '#111827');
   newFile.addEventListener('mouseleave', () => newFile.style.background = 'transparent');
+  const removeMenu = () => {
+    if (menu.isConnected) {
+      menu.remove();
+    }
+    document.removeEventListener('click', cleanup);
+  };
+
   newFile.addEventListener('click', async () => {
+    removeMenu();
     await createNewUntitled(dirPath);
-    menu.remove();
-    if (onClose) onClose();
   });
 
   menu.appendChild(newFile);
@@ -204,8 +210,7 @@ function showContextMenu(dirPath, x, y, onClose) {
 
   function cleanup(e) {
     if (!menu.contains(e.target)) {
-      menu.remove();
-      document.removeEventListener('click', cleanup);
+      removeMenu();
     }
   }
 
@@ -255,88 +260,19 @@ async function createNewUntitled(dirPath) {
       await window._lastOnFileClick(newPath);
     }
 
+    if (typeof window.focusFilenameInput === 'function') {
+      window.focusFilenameInput({ select: true });
+    }
+
     const fileEl = await findFileElementByPath(newPath);
     if (fileEl) {
       if (typeof fileEl.scrollIntoView === 'function') {
         fileEl.scrollIntoView({ block: 'nearest' });
       }
-      startInlineRenameOnElement(fileEl, newPath);
     } else {
-      console.warn('New file element not found for inline rename', newPath);
+      console.warn('New file element not found for focus', newPath);
     }
   }
-}
-
-function startInlineRenameOnElement(itemEl, fullPath) {
-  const originalText = itemEl.textContent || '';
-  const oldName = basename(fullPath);
-  const dir = dirname(fullPath);
-
-  // Clear contents but keep padding/icon if present
-  itemEl.innerHTML = '';
-  const iconSpan = document.createElement('span');
-  // choose icon based on file extension
-  iconSpan.textContent = oldName.endsWith('.md') ? '📄 ' : '📃 ';
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.value = oldName.replace(/\.md$/, '');
-  input.style.fontSize = '13px';
-  input.style.padding = '2px 6px';
-  input.style.minWidth = '120px';
-  input.style.background = 'transparent';
-  input.style.border = '1px solid rgba(255,255,255,0.06)';
-  input.style.color = '#e5e7eb';
-  input.style.borderRadius = '4px';
-
-  // add to element
-  itemEl.appendChild(iconSpan);
-  itemEl.appendChild(input);
-
-  // focus and select
-  setTimeout(() => {
-    input.focus();
-    input.select();
-  }, 10);
-
-  let done = false;
-  const finish = async (save) => {
-    if (done) return;
-    done = true;
-    const newNameRaw = input.value.trim();
-    if (!save || !newNameRaw) {
-      itemEl.textContent = originalText;
-      return;
-    }
-
-    let newName = newNameRaw;
-    if (!newName.toLowerCase().endsWith('.md')) newName += '.md';
-    const newPath = joinPaths(dir, newName);
-
-    const success = await window.api.renameFile(fullPath, newPath);
-    if (success) {
-      if (window.reloadWorkspace) {
-        await window.reloadWorkspace();
-        if (typeof window._lastOnFileClick === 'function') {
-          window._lastOnFileClick(newPath);
-        }
-      }
-      // show notification if available
-      if (typeof window.showNotification === 'function') {
-        window.showNotification('Renamed', 'success');
-      }
-    } else {
-      itemEl.textContent = originalText;
-      if (typeof window.showNotification === 'function') {
-        window.showNotification('Rename failed', 'error');
-      }
-    }
-  };
-
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') finish(true);
-    else if (e.key === 'Escape') finish(false);
-  });
-  input.addEventListener('blur', () => finish(true));
 }
 
 module.exports = { renderFileTree };

@@ -23,7 +23,9 @@ async function openFile(filePath, editor, fileTree, setupInternalLinkNavigation)
     const json = markdownToTiptap(markdown);
     editor.commands.setContent(json);
     
-    document.querySelector('#editor-header').textContent = filePath.split(/[\\/]/).pop();
+    if (typeof window.syncFilenameInput === 'function') {
+      window.syncFilenameInput(filePath);
+    }
     
     // Update active file in tree
     document.querySelectorAll('.file-item').forEach(item => {
