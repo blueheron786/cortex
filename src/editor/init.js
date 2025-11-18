@@ -9,7 +9,7 @@ const TableHeader = require('@tiptap/extension-table-header').default;
 const TaskList = require('@tiptap/extension-task-list').default;
 const TaskItem = require('@tiptap/extension-task-item').default;
 const Highlight = require('@tiptap/extension-highlight').default;
-const { BoldItalic, TaskListInputRule } = require('./extensions');
+const { BoldItalic, TaskListInputRule, ShowCurrentLineMarkup } = require('./extensions');
 const { MarkdownPaste } = require('./markdown-paste');
 const BulletList = require('@tiptap/extension-bullet-list').default;
 
@@ -24,6 +24,7 @@ function initEditor(onUpdate) {
       }),
       BoldItalic,
       TaskListInputRule,
+      ShowCurrentLineMarkup,
       MarkdownPaste,
       Link.configure({
         openOnClick: false, // We handle clicks ourselves for internal links
@@ -47,6 +48,17 @@ function initEditor(onUpdate) {
               default: 'editor-link',
               parseHTML: element => element.getAttribute('class'),
               renderHTML: attributes => ({ class: attributes.class })
+            },
+            // Store original page name for internal links
+            'data-page-name': {
+              default: null,
+              parseHTML: element => element.getAttribute('data-page-name'),
+              renderHTML: attributes => {
+                if (attributes['data-page-name']) {
+                  return { 'data-page-name': attributes['data-page-name'] };
+                }
+                return {};
+              }
             }
           };
         },
@@ -58,11 +70,12 @@ function initEditor(onUpdate) {
           return /^https?:\/\//.test(href) || /^mailto:/.test(href);
         },
         renderHTML({ HTMLAttributes }) {
-          // Always include href, data-href and class (if present)
+          // Always include href, data-href, class, and data-page-name (if present)
           const out = { ...HTMLAttributes };
           if (HTMLAttributes.href !== undefined) out.href = HTMLAttributes.href;
           if (HTMLAttributes['data-href'] !== undefined) out['data-href'] = HTMLAttributes['data-href'];
           if (HTMLAttributes.class !== undefined) out.class = HTMLAttributes.class;
+          if (HTMLAttributes['data-page-name'] !== undefined) out['data-page-name'] = HTMLAttributes['data-page-name'];
           return ['a', out, 0];
         }
       }),

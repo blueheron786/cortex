@@ -40,7 +40,9 @@ function parseInlineFormatting(text) {
               type: 'link',
               attrs: {
                 href: 'internal:' + pageName,
-                class: 'internal-link'
+                class: 'internal-link',
+                // Store the original page name for reconstruction
+                'data-page-name': pageName
               }
             }]
           });

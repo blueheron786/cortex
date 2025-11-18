@@ -1,6 +1,7 @@
 const { Extension } = require('@tiptap/core');
 const { TextSelection } = require('@tiptap/pm/state');
-const { Plugin } = require('@tiptap/pm/state');
+const { Plugin, PluginKey } = require('@tiptap/pm/state');
+const { Decoration, DecorationSet } = require('@tiptap/pm/view');
 
 // Custom extension for creating task lists with - [ ] or - [x]
 const TaskListInputRule = Extension.create({
@@ -176,4 +177,139 @@ const BoldItalic = Extension.create({
   },
 });
 
-module.exports = { BoldItalic, TaskListInputRule };
+// Extension to show raw markdown markup on the current line
+const ShowCurrentLineMarkup = Extension.create({
+  name: 'showCurrentLineMarkup',
+  
+  addProseMirrorPlugins() {
+    const pluginKey = new PluginKey('showCurrentLineMarkup');
+    
+    return [
+      new Plugin({
+        key: pluginKey,
+        
+        state: {
+          init() {
+            return DecorationSet.empty;
+          },
+          
+          apply(tr, oldState) {
+            // If selection changed or document changed, recalculate
+            if (tr.selectionSet || tr.docChanged) {
+              const { $from } = tr.selection;
+              const decorations = [];
+              
+              // Find the current line (paragraph, heading, etc.)
+              let currentNodePos = null;
+              let currentNode = null;
+              
+              // Walk up the tree to find the text block
+              for (let depth = $from.depth; depth > 0; depth--) {
+                const node = $from.node(depth);
+                if (node.isTextblock) {
+                  currentNode = node;
+                  currentNodePos = $from.start(depth) - 1; // Position before the node
+                  break;
+                }
+              }
+              
+              if (currentNode && currentNodePos !== null) {
+                // Add a class decoration to the current line to show raw markup
+                decorations.push(
+                  Decoration.node(currentNodePos, currentNodePos + currentNode.nodeSize, {
+                    class: 'show-markup'
+                  })
+                );
+                
+                // Add widget decorations for internal links to show full [[PageName|Display]] syntax
+                currentNode.descendants((node, pos) => {
+                  if (node.isText && node.marks) {
+                    node.marks.forEach(mark => {
+                      if (mark.type.name === 'link' && mark.attrs.href) {
+                        let pageName = null;
+                        
+                        // Extract page name from various internal link formats
+                        if (mark.attrs.href.startsWith('internal:')) {
+                          pageName = mark.attrs.href.slice(9);
+                        } else if (mark.attrs.href.startsWith('/__internal__/')) {
+                          pageName = mark.attrs.href.slice('/__internal__/'.length);
+                        } else if (mark.attrs['data-href'] && mark.attrs['data-href'].startsWith('internal:')) {
+                          pageName = mark.attrs['data-href'].slice(9);
+                        }
+                        
+                        // Also try data-page-name if available
+                        if (!pageName && mark.attrs['data-page-name']) {
+                          pageName = mark.attrs['data-page-name'];
+                        }
+                        
+                        if (pageName) {
+                          const displayText = node.text;
+                          
+                          // Check if display text differs from page name (excluding anchors)
+                          const pageNameWithoutAnchor = pageName.split('#')[0];
+                          const displayTextMatches = displayText === pageNameWithoutAnchor || displayText === pageName;
+                          
+                          const absolutePos = currentNodePos + 1 + pos;
+                          
+                          if (!displayTextMatches && displayText) {
+                            // Custom display text - add widgets for [[PageName|Display]]
+                            decorations.push(
+                              Decoration.widget(absolutePos, () => {
+                                const span = document.createElement('span');
+                                span.style.color = '#808080';
+                                span.textContent = '[[' + pageName + '|';
+                                return span;
+                              }, { side: -1 })
+                            );
+                            decorations.push(
+                              Decoration.widget(absolutePos + node.nodeSize, () => {
+                                const span = document.createElement('span');
+                                span.style.color = '#808080';
+                                span.textContent = ']]';
+                                return span;
+                              }, { side: 1 })
+                            );
+                          } else {
+                            // No custom display - add widgets for [[PageName]]
+                            decorations.push(
+                              Decoration.widget(absolutePos, () => {
+                                const span = document.createElement('span');
+                                span.style.color = '#808080';
+                                span.textContent = '[[';
+                                return span;
+                              }, { side: -1 })
+                            );
+                            decorations.push(
+                              Decoration.widget(absolutePos + node.nodeSize, () => {
+                                const span = document.createElement('span');
+                                span.style.color = '#808080';
+                                span.textContent = ']]';
+                                return span;
+                              }, { side: 1 })
+                            );
+                          }
+                        }
+                      }
+                    });
+                  }
+                });
+              }
+              
+              return DecorationSet.create(tr.doc, decorations);
+            }
+            
+            return oldState.map(tr.mapping, tr.doc);
+          }
+        },
+        
+        props: {
+          decorations(state) {
+            return pluginKey.getState(state);
+          }
+        }
+      })
+    ];
+  }
+});
+
+module.exports = { BoldItalic, TaskListInputRule, ShowCurrentLineMarkup };

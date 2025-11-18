@@ -357,6 +357,103 @@ body {
   color: var(--primary-color-hover) !important;
 }
 
+/* Show raw markdown markup on current line */
+.ProseMirror .show-markup strong::before {
+  content: '**';
+  font-weight: normal;
+  color: #808080;
+}
+
+.ProseMirror .show-markup strong::after {
+  content: '**';
+  font-weight: normal;
+  color: #808080;
+}
+
+.ProseMirror .show-markup em::before {
+  content: '*';
+  font-style: normal;
+  color: #808080;
+}
+
+.ProseMirror .show-markup em::after {
+  content: '*';
+  font-style: normal;
+  color: #808080;
+}
+
+.ProseMirror .show-markup code::before {
+  content: '`';
+  background: none;
+  color: #808080;
+}
+
+.ProseMirror .show-markup code::after {
+  content: '`';
+  background: none;
+  color: #808080;
+}
+
+.ProseMirror .show-markup mark::before {
+  content: '==';
+  background: none;
+  color: #808080;
+}
+
+.ProseMirror .show-markup mark::after {
+  content: '==';
+  background: none;
+  color: #808080;
+}
+
+/* Internal links are handled by widget decorations in JavaScript */
+
+/* External links - show as [text](url) - exclude internal link formats */
+.ProseMirror .show-markup a:not([href^="internal:"]):not([data-href^="internal:"]):not([href^="/__internal__/"])::before {
+  content: '[';
+  color: #808080;
+  text-decoration: none;
+}
+
+.ProseMirror .show-markup a:not([href^="internal:"]):not([data-href^="internal:"]):not([href^="/__internal__/"])::after {
+  content: '](' attr(href) ')';
+  color: #808080;
+  text-decoration: none;
+}
+
+.ProseMirror .show-markup h1::before {
+  content: '# ';
+  color: #808080;
+  font-size: 0.5em;
+}
+
+.ProseMirror .show-markup h2::before {
+  content: '## ';
+  color: #808080;
+  font-size: 0.67em;
+}
+
+.ProseMirror .show-markup h3::before {
+  content: '### ';
+  color: #808080;
+  font-size: 0.85em;
+}
+
+.ProseMirror .show-markup h4::before {
+  content: '#### ';
+  color: #808080;
+}
+
+.ProseMirror .show-markup h5::before {
+  content: '##### ';
+  color: #808080;
+}
+
+.ProseMirror .show-markup h6::before {
+  content: '###### ';
+  color: #808080;
+}
+
 /* Search Dialog Styles */
 .search-overlay {
   position: fixed;
