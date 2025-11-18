@@ -1,82 +1,154 @@
-function renderFileTree(items, container, level = 0, onFileClick) {
+const globalRuntime = typeof window !== 'undefined' ? window : globalThis;
+
+function getExpandedDirectories() {
+  if (!globalRuntime._expandedDirectories) {
+    globalRuntime._expandedDirectories = new Set();
+  }
+  return globalRuntime._expandedDirectories;
+}
+
+function rememberDirectoryState(dirPath, expanded) {
+  if (!dirPath) return;
+  const expandedDirs = getExpandedDirectories();
+  if (expanded) expandedDirs.add(dirPath);
+  else expandedDirs.delete(dirPath);
+}
+
+function ensureDirectoryChainExpanded(dirPath) {
+  if (!dirPath) return;
+  const expandedDirs = getExpandedDirectories();
+  let current = dirPath;
+  while (current && !expandedDirs.has(current)) {
+    expandedDirs.add(current);
+    const parent = dirname(current);
+    if (!parent || parent === current) break;
+    current = parent;
+  }
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function findFileElementByPath(targetPath, attempts = 5, waitMs = 60) {
+  if (!targetPath) return null;
+  const lookup = () => Array.from(document.querySelectorAll('.file-item'))
+    .find(it => it.dataset && it.dataset.path === targetPath);
+
+  let element = lookup();
+  let remaining = attempts;
+  while (!element && remaining > 0) {
+    await delay(waitMs);
+    element = lookup();
+    remaining--;
+  }
+  return element || null;
+}
+
+function joinPaths(a, b) {
+  if (!a) return b;
+  const sep = a.includes('\\') ? '\\' : '/';
+  if (a.endsWith('\\') || a.endsWith('/')) return a + b;
+  return a + sep + b;
+}
+
+function basename(p) {
+  if (!p) return '';
+  const parts = p.split(/[\\/]/);
+  return parts[parts.length - 1] || '';
+}
+
+function dirname(p) {
+  if (!p) return '';
+  const normalized = p.replace(/[\\/]+$/, '');
+  const idx = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+  if (idx === -1) return '';
+  return normalized.slice(0, idx);
+}
+
+function renderFileTree(items, container, level = 0, onFileClick, parentPath = '') {
   if (level === 0) {
     container.innerHTML = '';
   }
-  
-  items.forEach(item => {
+
+  const expandedDirs = getExpandedDirectories();
+  const hasItems = Array.isArray(items) ? items : [];
+
+  hasItems.forEach(item => {
     const itemDiv = document.createElement('div');
-    
+    const currentPath = item.path || joinPaths(parentPath, item.name || '');
+
     if (item.isDirectory) {
+      const hasChildren = Array.isArray(item.children) && item.children.length > 0;
+      const folderName = item.name || basename(currentPath) || '';
       itemDiv.className = 'folder-item';
-      const folderName = item.name;
+      itemDiv.dataset.path = currentPath || '';
       itemDiv.style.paddingLeft = (level * 12) + 'px';
       itemDiv.style.cursor = 'pointer';
-      
-      if (item.children && item.children.length > 0) {
+
+      if (hasChildren) {
         const childrenDiv = document.createElement('div');
         childrenDiv.className = 'folder-children';
-        childrenDiv.style.display = 'none'; // Start collapsed
-        
+
         // Create icon and text separately
         const icon = document.createElement('span');
-        icon.textContent = '▶ ';
         const text = document.createElement('span');
         text.textContent = folderName;
         itemDiv.appendChild(icon);
         itemDiv.appendChild(text);
-        
-        renderFileTree(item.children, childrenDiv, level + 1, onFileClick);
-        
+
+        const shouldStartExpanded = expandedDirs.has(currentPath);
+        childrenDiv.style.display = shouldStartExpanded ? 'block' : 'none';
+        icon.textContent = shouldStartExpanded ? '▼ ' : '▶ ';
+
+        renderFileTree(item.children, childrenDiv, level + 1, onFileClick, currentPath);
+
         // Toggle folder on click
         itemDiv.addEventListener('click', (e) => {
-          e.stopPropagation(); // Prevent parent folder clicks from interfering
+          e.stopPropagation();
           const isCurrentlyHidden = childrenDiv.style.display === 'none';
           if (isCurrentlyHidden) {
             childrenDiv.style.display = 'block';
             icon.textContent = '▼ ';
+            rememberDirectoryState(currentPath, true);
           } else {
             childrenDiv.style.display = 'none';
             icon.textContent = '▶ ';
+            rememberDirectoryState(currentPath, false);
           }
         });
-        
+
         // context menu for folder: new file
         itemDiv.addEventListener('contextmenu', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const dirPath = item.path;
-          showContextMenu(dirPath, e.pageX, e.pageY, () => {
-            // after creating, reload workspace
-            if (window.reloadWorkspace) window.reloadWorkspace();
-            // open the new file by reloading tree in caller
-          });
+          showContextMenu(currentPath, e.pageX, e.pageY);
         });
 
         container.appendChild(itemDiv);
         container.appendChild(childrenDiv);
       } else {
         itemDiv.textContent = '▶ ' + folderName;
-        // allow creating files in empty folder
         itemDiv.addEventListener('contextmenu', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const dirPath = item.path;
-          showContextMenu(dirPath, e.pageX, e.pageY, () => {
-            if (window.reloadWorkspace) window.reloadWorkspace();
-          });
+          showContextMenu(currentPath, e.pageX, e.pageY);
         });
         container.appendChild(itemDiv);
       }
     } else {
+      const filePath = currentPath;
+      const isMarkdown = filePath && filePath.endsWith('.md');
+      const displayName = item.name || basename(filePath) || '';
       itemDiv.className = 'file-item';
-      itemDiv.textContent = item.name.endsWith('.md') ? '📄 ' + item.name : '📃 ' + item.name;
+      itemDiv.textContent = isMarkdown ? '📄 ' + displayName : '📃 ' + displayName;
       itemDiv.style.paddingLeft = (level * 12) + 'px';
-      itemDiv.dataset.path = item.path;
-      
-      if (item.name.endsWith('.md')) {
-        itemDiv.addEventListener('click', () => onFileClick(item.path));
+      itemDiv.dataset.path = filePath;
+
+      if (isMarkdown) {
+        itemDiv.addEventListener('click', () => onFileClick(filePath));
       }
-      
+
       container.appendChild(itemDiv);
     }
   });
@@ -88,9 +160,7 @@ function renderFileTree(items, container, level = 0, onFileClick) {
       if (e.target === container) {
         e.preventDefault();
         const dirPath = window._currentWorkspacePath || '';
-        showContextMenu(dirPath, e.pageX, e.pageY, () => {
-          if (window.reloadWorkspace) window.reloadWorkspace();
-        });
+        showContextMenu(dirPath, e.pageX, e.pageY);
       }
     });
   }
@@ -169,60 +239,35 @@ async function createNewUntitled(dirPath) {
   }
 
   const workspace = dirPath || window._currentWorkspacePath || '';
-  // lightweight path join for browser bundle (respect existing separator)
-  function joinPaths(a, b) {
-    if (!a) return b;
-    const sep = a.includes('\\') ? '\\' : '/';
-    if (a.endsWith('\\') || a.endsWith('/')) return a + b;
-    return a + sep + b;
-  }
-
   const newPath = joinPaths(workspace, name);
   const success = await window.api.writeFile(newPath, '');
   if (!success) {
     console.error('Failed to create', newPath);
     return;
   }
+  const targetDir = dirPath || dirname(newPath);
+  ensureDirectoryChainExpanded(targetDir);
+
   // Reload workspace and open file if possible
   if (window.reloadWorkspace) {
     await window.reloadWorkspace();
-    // After reload, open the new file and start inline rename in tree
     if (typeof window._lastOnFileClick === 'function') {
-      window._lastOnFileClick(newPath);
+      await window._lastOnFileClick(newPath);
     }
 
-    // Try to find the new file element in the refreshed tree
-    const items = Array.from(document.querySelectorAll('.file-item'));
-    const fileEl = items.find(it => it.dataset && it.dataset.path === newPath);
+    const fileEl = await findFileElementByPath(newPath);
     if (fileEl) {
+      if (typeof fileEl.scrollIntoView === 'function') {
+        fileEl.scrollIntoView({ block: 'nearest' });
+      }
       startInlineRenameOnElement(fileEl, newPath);
+    } else {
+      console.warn('New file element not found for inline rename', newPath);
     }
   }
 }
 
 function startInlineRenameOnElement(itemEl, fullPath) {
-  // Get file name without directories
-  function basename(p) {
-    if (!p) return '';
-    return p.split(/[\\\/]/).pop();
-  }
-
-  function dirname(p) {
-    if (!p) return '';
-    const parts = p.split(/[\\\/]/);
-    if (parts.length <= 1) return p;
-    parts.pop();
-    const sep = p.includes('\\') ? '\\' : '/';
-    return parts.join(sep);
-  }
-
-  function joinPaths(a, b) {
-    if (!a) return b;
-    const sep = a.includes('\\') ? '\\' : '/';
-    if (a.endsWith('\\') || a.endsWith('/')) return a + b;
-    return a + sep + b;
-  }
-
   const originalText = itemEl.textContent || '';
   const oldName = basename(fullPath);
   const dir = dirname(fullPath);

@@ -13,6 +13,7 @@ describe('renderFileTree', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     onFileClickMock = jest.fn();
+    window._expandedDirectories = new Set();
   });
 
   afterEach(() => {
@@ -204,6 +205,54 @@ describe('renderFileTree', () => {
       
       expect(container.querySelectorAll('.folder-item').length).toBe(3);
       expect(container.querySelectorAll('.file-item').length).toBe(1);
+    });
+  });
+
+  describe('Expanded folder state', () => {
+    it('should render folders expanded when tracked in window._expandedDirectories', () => {
+      window._expandedDirectories = new Set(['/parent']);
+      const items = [
+        {
+          name: 'parent',
+          path: '/parent',
+          isDirectory: true,
+          children: [
+            { name: 'child.md', isDirectory: false, path: '/parent/child.md' }
+          ]
+        }
+      ];
+
+      renderFileTree(items, container, 0, onFileClickMock);
+
+      const childrenContainer = container.querySelector('.folder-children');
+      expect(childrenContainer.style.display).toBe('block');
+    });
+
+    it('should update expanded directory tracking when toggling folders', () => {
+      window._expandedDirectories = new Set();
+      const items = [
+        {
+          name: 'parent',
+          path: '/parent',
+          isDirectory: true,
+          children: [
+            { name: 'child.md', isDirectory: false, path: '/parent/child.md' }
+          ]
+        }
+      ];
+
+      renderFileTree(items, container, 0, onFileClickMock);
+
+      const folderItem = container.querySelector('.folder-item');
+      const childrenContainer = container.querySelector('.folder-children');
+
+      folderItem.click();
+      expect(childrenContainer.style.display).toBe('block');
+      expect(window._expandedDirectories.has('/parent')).toBe(true);
+
+      folderItem.click();
+      expect(childrenContainer.style.display).toBe('none');
+      expect(window._expandedDirectories.has('/parent')).toBe(false);
     });
   });
 

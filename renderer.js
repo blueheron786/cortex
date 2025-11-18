@@ -60,7 +60,12 @@ openFolderBtn.addEventListener('click', async () => {
 
 // Load workspace and setup internal links
 async function loadWorkspace(folderPath) {
+  const isDifferentWorkspace = currentWorkspacePath !== folderPath;
   currentWorkspacePath = folderPath;
+
+  if (isDifferentWorkspace) {
+    window._expandedDirectories = new Set();
+  }
   
   // Load file tree
   fileTree = await window.api.readDir(folderPath);
