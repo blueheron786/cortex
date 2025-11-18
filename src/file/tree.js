@@ -149,6 +149,13 @@ function renderFileTree(items, container, level = 0, onFileClick, parentPath = '
         itemDiv.addEventListener('click', () => onFileClick(filePath));
       }
 
+      // Add context menu for files
+      itemDiv.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showFileContextMenu(filePath, e.pageX, e.pageY);
+      });
+
       container.appendChild(itemDiv);
     }
   });
@@ -215,6 +222,92 @@ function showContextMenu(dirPath, x, y) {
   }
 
   setTimeout(() => document.addEventListener('click', cleanup), 0);
+}
+
+function showFileContextMenu(filePath, x, y) {
+  // remove existing
+  const existing = document.querySelector('.custom-context-menu');
+  if (existing) existing.remove();
+
+  const menu = document.createElement('div');
+  menu.className = 'custom-context-menu';
+  menu.style.position = 'absolute';
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  menu.style.background = '#0f1724';
+  menu.style.border = '1px solid rgba(255,255,255,0.06)';
+  menu.style.boxShadow = '0 6px 18px rgba(2,6,23,0.6)';
+  menu.style.zIndex = 3000;
+  menu.style.padding = '4px 0';
+  menu.style.minWidth = '110px';
+  menu.style.borderRadius = '6px';
+
+  const deleteFile = document.createElement('div');
+  deleteFile.textContent = 'Delete';
+  deleteFile.style.padding = '6px 10px';
+  deleteFile.style.cursor = 'pointer';
+  deleteFile.style.color = '#ef4444';
+  deleteFile.style.fontSize = '13px';
+  deleteFile.addEventListener('mouseenter', () => deleteFile.style.background = '#111827');
+  deleteFile.addEventListener('mouseleave', () => deleteFile.style.background = 'transparent');
+  
+  const removeMenu = () => {
+    if (menu.isConnected) {
+      menu.remove();
+    }
+    document.removeEventListener('click', cleanup);
+  };
+
+  deleteFile.addEventListener('click', async () => {
+    removeMenu();
+    await deleteFileWithConfirm(filePath);
+  });
+
+  menu.appendChild(deleteFile);
+  document.body.appendChild(menu);
+
+  function cleanup(e) {
+    if (!menu.contains(e.target)) {
+      removeMenu();
+    }
+  }
+
+  setTimeout(() => document.addEventListener('click', cleanup), 0);
+}
+
+async function deleteFileWithConfirm(filePath) {
+  const fileName = basename(filePath);
+  const confirmed = confirm(`Are you sure you want to delete "${fileName}"?`);
+  
+  if (!confirmed) return;
+
+  try {
+    const success = await window.api.deleteFile(filePath);
+    if (success) {
+      // If the deleted file is currently open, clear the editor
+      if (window._currentFilePath === filePath) {
+        window._currentFilePath = null;
+        if (window._editor) {
+          window._editor.commands.setContent('<p>Select a file to start editing.</p>');
+        }
+        const filenameInput = document.getElementById('editor-filename-input');
+        if (filenameInput) {
+          filenameInput.value = '';
+          filenameInput.disabled = true;
+        }
+      }
+
+      // Reload the file tree
+      if (window.reloadWorkspace) {
+        await window.reloadWorkspace();
+      }
+    } else {
+      alert(`Failed to delete "${fileName}"`);
+    }
+  } catch (err) {
+    console.error('Error deleting file:', err);
+    alert(`Error deleting "${fileName}": ${err.message}`);
+  }
 }
 
 async function createNewUntitled(dirPath) {

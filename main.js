@@ -107,6 +107,16 @@ ipcMain.handle('rename-file', async (_, oldPath, newPath) => {
   }
 });
 
+// Delete a file
+ipcMain.handle('delete-file', async (_, filePath) => {
+  try {
+    await fs.unlink(filePath);
+    return true;
+  } catch (err) {
+    return false;
+  }
+});
+
 ipcMain.handle('read-settings', async () => {
   const settingsPath = path.join(app.getPath('userData'), 'settings.json');
   try {
