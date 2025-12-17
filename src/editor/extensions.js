@@ -63,18 +63,19 @@ const TaskListInputRule = Extension.create({
               // Find the index of this list item within the bullet list
               const listItemIndex = $from.index(-1);
               
+              // Get the bullet list position (we'll need it for cursor positioning later)
+              const bulletListPos = $from.start(-2) - 1;
+              
               // Strategy: Split the bullet list into parts and insert a task list for this item
               // If this is the only item, just replace the whole bullet list with a task list
               if (bulletList.childCount === 1) {
                 // Simple case: replace the entire bullet list with a task list
-                const bulletListPos = $from.start(-2) - 1;
                 const bulletListEnd = bulletListPos + bulletList.nodeSize;
                 const taskList = state.schema.nodes.taskList.create(null, [taskItem]);
                 tr.replaceWith(bulletListPos, bulletListEnd, taskList);
               } else {
                 // Complex case: Extract this item as a separate task list
                 // We'll need to split the bullet list if this item is in the middle
-                const bulletListPos = $from.start(-2) - 1;
                 
                 // Collect all list items before and after this one
                 const itemsBefore = [];
@@ -109,11 +110,14 @@ const TaskListInputRule = Extension.create({
                 tr.replaceWith(bulletListPos, bulletListEnd, nodes);
               }
               
-              // Set cursor after the content we preserved
-              const finalPos = tr.mapping.map(listItemPos + 1);
-              const cursorOffset = textAfterCheckbox.length > 0 ? textAfterCheckbox.length : 0;
-              const newPos = finalPos + cursorOffset;
-              tr.setSelection(TextSelection.create(tr.doc, newPos));
+              // Set cursor inside the paragraph of the task item
+              // The structure is: taskList -> taskItem -> paragraph -> text
+              // We want to position at the end of the text content
+              const taskListPos = tr.mapping.map(bulletListPos);
+              // Position calculation: +1 (into taskList), +1 (into taskItem), +1 (into paragraph)
+              const paragraphPos = taskListPos + 3;
+              const cursorPos = paragraphPos + textAfterCheckbox.length;
+              tr.setSelection(TextSelection.create(tr.doc, cursorPos));
               dispatch(tr);
               
               return true;
