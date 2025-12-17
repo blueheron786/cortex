@@ -249,8 +249,10 @@ document.addEventListener('keydown', (e) => {
   // Cmd/Ctrl + S: Manual save (auto-save is already enabled)
   if ((e.metaKey || e.ctrlKey) && e.key === 's') {
     e.preventDefault();
-    // Save is automatic, but we can show a notification
-    showNotification('Saved', 'success');
+    const { saveFile } = require('./src/file/operations');
+    saveFile(editor, turndownService).then(() => {
+      showNotification('Saved', 'success');
+    });
   }
   
   // Cmd/Ctrl + K: Quick link insert (optional)
